@@ -1,0 +1,13 @@
+{
+  "name": "mcta-push",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": { "deploy": "wrangler deploy" },
+  "devDependencies": { "wrangler": "^4.0.0" },
+  "cloudflare": {
+    "bindings": {
+      "HUB": { "description": "Bộ nhớ hẹn giờ thông báo (Durable Object) — giữ nguyên mặc định." }
+    }
+  }
+}
