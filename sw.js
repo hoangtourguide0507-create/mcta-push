@@ -1,5 +1,5 @@
 // V26.0 — mở app tức thì từ bộ nhớ đệm; bản mới được tải ngầm và áp dụng ở lần mở sau.
-const CACHE="freelance-planner-v28-0";
+const CACHE="freelance-planner-v28-1";
 const ASSETS=["./","./index.html","./style.css","./app.js","./sync-merge.js","./manifest.json","./manifest-clean.json","./manifest-fresh.json","./manifest-pink.json","./manifest-tiki.json","./manifest-green.json","./manifest-pop.json",
 "./icons/app-fresh-192.png","./icons/app-pop-192.png","./icons/app-pink-192.png","./icons/app-tiki-192.png","./icons/app-green-192.png","./icons/app-clean-192.png"];
 self.addEventListener("install",e=>{self.skipWaiting();e.waitUntil(caches.open(CACHE).then(async c=>{for(const a of ASSETS){try{await c.add(new Request(a,{cache:"reload"}))}catch(_){}}}));});

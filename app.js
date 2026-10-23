@@ -1,7 +1,7 @@
 
 const APP_VERSION="V28.0";
 // V28.0: app chạy trên GitHub Pages; dữ liệu + thông báo nằm trên máy chủ Cloudflare riêng (mcta-push).
-const CLOUD_DEFAULT="";
+const CLOUD_DEFAULT="https://mcta-push.hoangtourguide0507.workers.dev";
 const KEY="freelance_planner_v12";
 const OLD_KEYS=["freelance_planner_v16","freelance_planner_v15","freelance_planner_v14","freelance_planner_v13","freelance_planner_v12","freelance_planner_v11","freelance_planner_v10","freelance_planner_v9","freelance_planner_v8","freelance_planner_v7","freelance_planner_v6","freelance_planner_v5","freelance_planner_v4","freelance_planner_v3","freelance_planner_v2","freelance_planner_v1"];
 let raw=localStorage.getItem(KEY)||OLD_KEYS.map(k=>localStorage.getItem(k)).find(Boolean);
