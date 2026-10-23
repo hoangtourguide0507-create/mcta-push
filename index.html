@@ -7,8 +7,8 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="MC Thiên Ân">
-<link id="themeAppIcon" rel="apple-touch-icon" href="icons/app-fresh-180.png">
-<link id="themeManifest" rel="manifest" href="manifest-fresh.json">
+<link id="themeAppIcon" rel="apple-touch-icon" href="icons/app-pop-180.png">
+<link id="themeManifest" rel="manifest" href="manifest-pop.json">
 <style>
 html,body{margin:0;background:#f5f6fa}
 #splash{position:fixed;inset:0;z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:#f5f6fa;font:600 13px -apple-system,BlinkMacSystemFont,sans-serif;color:#7c8295;transition:opacity .3s}
@@ -18,16 +18,17 @@ html,body{margin:0;background:#f5f6fa}
 @keyframes sp{to{transform:rotate(360deg)}}
 </style>
 <script>
-(function(){var t="fresh";try{t=localStorage.getItem("mcta_theme")||"fresh";}catch(e){}
-var c={pop:["#f5f6fa","#ff5a1f"],pink:["#fff3f8","#e0508a"],tiki:["#eef9ff","#1a94ff"],green:["#effdf8","#12b886"],clean:["#f7f4ef","#1c1e2b"],fresh:["#f3f9fe","#3b7be8"]}[t]||["#f5f6fa","#ff5a1f"];
+(function(){var t="pop";try{t=localStorage.getItem("mcta_theme")||"pop";}catch(e){}
+var c={pop:["#f5f6fa","#ff5a1f"],stage:["#0c0c13","#f2c76b"]}[t];if(!c){t="pop";c=["#f5f6fa","#ff5a1f"];}
 document.documentElement.setAttribute("data-theme",t);window.__splash={bg:c[0],ac:c[1],icon:"icons/app-"+t+"-192.png"};
-document.write('<style>html,body,#splash{background:'+c[0]+'}#splash i{border-top-color:'+c[1]+'}</style>');})();
+var m=document.querySelector('meta[name="theme-color"]');if(m)m.setAttribute("content",c[0]);
+document.write('<style>html,body,#splash{background:'+c[0]+'}#splash i{border-top-color:'+c[1]+'}'+(t==="stage"?'#splash{color:#a59f8a}':'')+'</style>');})();
 </script>
-<link rel="stylesheet" href="style.css?v=28.4">
+<link rel="stylesheet" href="style.css?v=28.6">
 <title>MC Thiên Ân</title>
 </head>
 <body>
-<div id="splash"><img alt="" src="icons/app-fresh-192.png" onerror="this.style.display='none'"><i></i><span>Đang mở sổ show…</span></div>
+<div id="splash"><img alt="" src="icons/app-pop-192.png" onerror="this.style.display='none'"><i></i><span>Đang mở sổ show…</span></div>
 <script>try{document.querySelector("#splash img").src=window.__splash.icon}catch(e){}</script>
 <div id="app">
   <header class="topbar">
@@ -46,7 +47,7 @@ document.write('<style>html,body,#splash{background:'+c[0]+'}#splash i{border-to
   </nav>
 </div>
 <div id="modal" class="modal hidden"><div class="modal-card" id="modalCard"></div></div>
-<script src="sync-merge.js?v=28.4"></script>
-<script src="app.js?v=28.4"></script>
+<script src="sync-merge.js?v=28.6"></script>
+<script src="app.js?v=28.6"></script>
 </body>
 </html>

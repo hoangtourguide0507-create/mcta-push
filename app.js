@@ -1,8 +1,10 @@
 
-const APP_VERSION="V28.2";
+const APP_VERSION="V28.3";
 // V28.0: app chạy trên GitHub Pages; dữ liệu + thông báo nằm trên máy chủ Cloudflare riêng (mcta-push).
 const CLOUD_DEFAULT="https://mcta-push.hoangtourguide0507.workers.dev";
 const KEY="freelance_planner_v12";
+// V28.3: chỉ còn 2 giao diện — "Super App" (sáng, icon nhiều màu) và "Sân khấu" (tối, vàng gold). Theme cũ tự về Super App.
+const THEMES=["pop","stage"],THEME_BG={pop:"#f5f6fa",stage:"#0c0c13"};
 const OLD_KEYS=["freelance_planner_v16","freelance_planner_v15","freelance_planner_v14","freelance_planner_v13","freelance_planner_v12","freelance_planner_v11","freelance_planner_v10","freelance_planner_v9","freelance_planner_v8","freelance_planner_v7","freelance_planner_v6","freelance_planner_v5","freelance_planner_v4","freelance_planner_v3","freelance_planner_v2","freelance_planner_v1"];
 let raw=localStorage.getItem(KEY)||OLD_KEYS.map(k=>localStorage.getItem(k)).find(Boolean);
 let state=raw?JSON.parse(raw):null;
@@ -10,7 +12,7 @@ let seedReady=!!state;
 function initializeState(next){
   state=next;
   state.settings=state.settings||{};
-  state.settings.theme=state.settings.theme||"fresh";
+  state.settings.theme=state.settings.theme||"pop";
   state.settings.appName=state.settings.appName||"MC Thiên Ân";
   state.settings.push=state.settings.push||{enabled:false,subscribed:false,lastStatus:""};
   state.settings.financeVisible=state.settings.financeVisible===true;
@@ -18,7 +20,7 @@ function initializeState(next){
   state.settings.soundNotifications=state.settings.soundNotifications!==false;
   state.settings.browserMapsKey=state.settings.browserMapsKey||"";
   state.settings.jobTypes=Array.isArray(state.settings.jobTypes)?state.settings.jobTypes:[];
-  state.settings.appName=String(state.settings.appName||"MC Thiên Ân").trim()||"MC Thiên Ân"; if(state.settings.theme==="pro") state.settings.theme="pink"; const validThemes=["clean","fresh","pink","tiki","green","pop"]; if(!validThemes.includes(state.settings.theme)) state.settings.theme="fresh";
+  state.settings.appName=String(state.settings.appName||"MC Thiên Ân").trim()||"MC Thiên Ân"; if(!THEMES.includes(state.settings.theme)) state.settings.theme="pop";
   state.notes=state.notes||[]; state.vendors=state.vendors||[]; state.bookers=state.bookers||[];
   state.jobs=state.jobs||[];
   normalizeJobTypes();
@@ -53,14 +55,14 @@ async function ensureSeed(){
     seedReady=true;
     return true;
   }catch(e){
-    initializeState({jobs:[],bookers:[],notes:[],vendors:[],settings:{theme:"fresh",appName:"MC Thiên Ân"}});
+    initializeState({jobs:[],bookers:[],notes:[],vendors:[],settings:{theme:"pop",appName:"MC Thiên Ân"}});
     seedReady=true;
     return false;
   }
 }
 
 function bootLocal(){
-  if(!state || typeof state!=="object") state={jobs:[],bookers:[],notes:[],vendors:[],settings:{theme:"fresh",appName:"MC Thiên Ân"}};
+  if(!state || typeof state!=="object") state={jobs:[],bookers:[],notes:[],vendors:[],settings:{theme:"pop",appName:"MC Thiên Ân"}};
   initializeState(state);
   document.documentElement.dataset.theme=state.settings.theme;
 }
@@ -124,9 +126,9 @@ function collectMeetings(d){
   return out.sort((a,b)=>(a.date+(a.time||"")).localeCompare(b.date+(b.time||"")));
 }
 
-function hideSplash(){try{localStorage.setItem("mcta_theme",state.settings.theme||"fresh");}catch(_){}const sp=document.getElementById("splash");if(sp){sp.classList.add("gone");setTimeout(()=>sp.remove(),350);}}
+function hideSplash(){try{localStorage.setItem("mcta_theme",state.settings.theme||"pop");}catch(_){}const sp=document.getElementById("splash");if(sp){sp.classList.add("gone");setTimeout(()=>sp.remove(),350);}}
 // ---- V23.1: đồng bộ theo từng mục + ghi nhận xoá ----
-const DEVICE_SETTINGS=["financeVisible","soundNotifications","browserMapsKey","push","cloud","cardFields","motion","_u"];
+const DEVICE_SETTINGS=["financeVisible","soundNotifications","browserMapsKey","push","cloud","cardFields","motion","theme","_u"];
 let syncSnap=null;
 function sharedSettingsStr(st){const o={};Object.keys(st.settings||{}).sort().forEach(k=>{if(!DEVICE_SETTINGS.includes(k))o[k]=st.settings[k];});return JSON.stringify(o);}
 function itemStr(it){const {_u,...rest}=it;return JSON.stringify(rest);}
@@ -190,9 +192,32 @@ function popIcon(name,size){
   if(!art[name])return null;
   return `<svg class="${name}-icon pop-icon" viewBox="0 0 24 24" width="${size}" height="${size}" aria-hidden="true">${art[name]}</svg>`;
 }
+// ---- V28.3: bộ icon "Sân khấu" — nét mảnh vàng gold, điểm sao lấp lánh ----
+const STAGE_ART={
+ home:'<path d="M3.4 10.7 12 3.7l8.6 7"/><path d="M5.6 9.3v10.9h12.8V9.3"/><path d="M9.8 20.2v-5.4h4.4v5.4"/><path class="acc" d="m18.6 2.6.5 1.2 1.2.5-1.2.5-.5 1.2-.5-1.2-1.2-.5 1.2-.5Z"/>',
+ calendar:'<rect x="3.2" y="5" width="17.6" height="15.8" rx="3.2"/><path d="M7.6 3v4M16.4 3v4M3.2 9.6h17.6"/><path class="acc" d="m12 12.2.9 1.9 2.1.3-1.5 1.5.4 2.1-1.9-1-1.9 1 .4-2.1-1.5-1.5 2.1-.3Z"/>',
+ jobs:'<rect x="9" y="2.8" width="6" height="11" rx="3"/><path d="M5.8 10.8a6.2 6.2 0 0 0 12.4 0M12 17v3.6M8.6 20.6h6.8"/><path d="M9 7.2h2.2M9 9.8h2.2"/><path class="acc" d="m19.6 3.4.4 1 1 .4-1 .4-.4 1-.4-1-1-.4 1-.4Z"/>',
+ note:'<path d="M6 3h8.6L19 7.4V20a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z"/><path d="M14.4 3v4.6H19"/><path d="M8 11.5h8M8 14.8h8M8 18h4.6"/>',
+ more:'<rect x="3.5" y="3.5" width="7" height="7" rx="2.2"/><rect x="13.5" y="3.5" width="7" height="7" rx="2.2"/><rect x="3.5" y="13.5" width="7" height="7" rx="2.2"/><path class="acc" d="m17 13.2.9 2.3 2.3.9-2.3.9-.9 2.3-.9-2.3-2.3-.9 2.3-.9Z"/>',
+ booker:'<circle cx="11" cy="8" r="3.6"/><path d="M4 20.4c.9-4 3.5-6 7-6s6.1 2 7 6"/><path class="acc" d="m19 3.6.5 1.3 1.3.5-1.3.5-.5 1.3-.5-1.3-1.3-.5 1.3-.5Z"/>',
+ bell:'<path d="M6.2 9.6a5.8 5.8 0 0 1 11.6 0c0 6 2.6 6.6 2.6 8.2H3.6c0-1.6 2.6-2.2 2.6-8.2Z"/><path d="M10 21h4"/>',
+ eye:'<path d="M2.4 12s3.4-6 9.6-6 9.6 6 9.6 6-3.4 6-9.6 6-9.6-6-9.6-6Z"/><circle cx="12" cy="12" r="2.7"/>',
+ morecircle:'<path d="M2.4 12s3.4-6 9.6-6 9.6 6 9.6 6-3.4 6-9.6 6-9.6-6-9.6-6Z"/><path d="M4 4l16 16"/>',
+ finance:'<ellipse cx="9" cy="7" rx="5.6" ry="2.4"/><path d="M3.4 7v4.4c0 1.3 2.5 2.4 5.6 2.4M3.4 11.4v4.4c0 1.3 2.5 2.4 5.6 2.4"/><ellipse cx="15.6" cy="13.6" rx="5" ry="2.2"/><path d="M10.6 13.6v4.2c0 1.2 2.2 2.2 5 2.2s5-1 5-2.2v-4.2"/>',
+ phone:'<path d="M7.4 3.5 10 6l-1.7 2.7a13.2 13.2 0 0 0 7 7L18 14l2.5 2.6-1.8 3.1c-.4.7-1.2 1-2 .8C9.5 18.9 5.1 14.5 3.5 7.3c-.2-.8.1-1.6.8-2Z"/>',
+ messenger:'<path d="M12 3.4c-5.3 0-9.6 3.9-9.6 8.7 0 2.7 1.4 5.1 3.7 6.7v2.8l2.8-1.5c1 .3 2 .4 3.1.4 5.3 0 9.6-3.9 9.6-8.7S17.3 3.4 12 3.4Z"/><path d="m7.4 13.8 3.1-3.2 2.4 2 4-2.3-3.1 3.3-2.4-2Z"/>',
+ edit:'<path d="M4 20h4L18.6 9.4a2.1 2.1 0 0 0-3-3L5 17v3Z"/><path d="m13.8 7.2 3 3"/>',
+ pin:'<path d="M12 21.4s-6.8-6.1-6.8-11.6a6.8 6.8 0 0 1 13.6 0c0 5.5-6.8 11.6-6.8 11.6Z"/><circle cx="12" cy="9.8" r="2.4"/>',
+ check:'<circle cx="12" cy="12" r="9"/><path d="m7.8 12.3 2.8 2.8 5.6-6"/>',
+ link:'<path d="M10 13a5 5 0 0 0 7.1.1l2-2a5 5 0 0 0-7.1-7.1l-1.1 1.1"/><path d="M14 11a5 5 0 0 0-7.1-.1l-2 2A5 5 0 0 0 12 20l1.1-1.1"/>',
+ plus:'<path d="M12 5v14M5 12h14"/>',search:'<circle cx="10.8" cy="10.8" r="6.5"/><path d="m16 16 5 5"/>',
+ chevron:'<path d="m9 5 7 7-7 7"/>',back:'<path d="m15 5-7 7 7 7"/>'
+};
+function stageIcon(name,size){const a=STAGE_ART[name];if(!a)return null;return `<svg class="${name}-icon stage-icon" viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${a}</svg>`;}
 function icon(name,size=19){
  const themeNow=state?.settings?.theme;
  if(themeNow==="pop"){const r=popIcon(name,size);if(r)return r;}
+ if(themeNow==="stage"){const r=stageIcon(name,size);if(r)return r;}
  const p={
  home:'<path d="M3 10.5 12 3l9 7.5"/><path d="M5.5 9.5V21h13V9.5"/><path d="M9.5 21v-6h5v6"/>',
  calendar:'<rect x="3" y="4.5" width="18" height="17" rx="3"/><path d="M7 2.5v4M17 2.5v4M3 9h18"/>',
@@ -208,55 +233,7 @@ function icon(name,size=19){
  finance:'<path d="M4 19.5V11M10 19.5V7M16 19.5V4M22 19.5H2"/>', eye:'<path d="M2.5 12s3.3-5.3 9.5-5.3 9.5 5.3 9.5 5.3-3.3 5.3-9.5 5.3S2.5 12 2.5 12Z"/><circle cx="12" cy="12" r="2.4"/>',
  check:'<path d="m5 12 4.2 4L19 6"/>', link:'<path d="M10 13a5 5 0 0 0 7.1.1l2-2a5 5 0 0 0-7.1-7.1l-1.1 1.1"/><path d="M14 11a5 5 0 0 0-7.1-.1l-2 2A5 5 0 0 0 12 20l1.1-1.1"/>', pin:'<path d="M8 4h8l1 5-2.7 2.7V17l-2.3 2.5L9.7 17v-5.3L7 9l1-5Z"/><path d="M12 19.5V22"/>', morecircle:'<circle cx="12" cy="12" r="9"/><circle cx="8" cy="12" r="1" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1" fill="currentColor" stroke="none"/><circle cx="16" cy="12" r="1" fill="currentColor" stroke="none"/>' 
  };
- const variants={
-   clean:{
-     home:'<path d="M4 10.5 12 4l8 6.5V20H4Z"/><path d="M9 20v-5h6v5"/>',
-     calendar:'<rect x="4" y="5" width="16" height="16" rx="4"/><path d="M8 3v4M16 3v4M4 10h16"/>',
-     jobs:'<rect x="5" y="7" width="14" height="13" rx="3"/><path d="M9 7V5h6v2M8 13h8"/>',
-     booker:'<circle cx="12" cy="8" r="3"/><path d="M6 20c1.1-3.3 3-5 6-5s4.9 1.7 6 5"/>',
-     note:'<rect x="5" y="4" width="14" height="16" rx="2"/><path d="M8 9h8M8 13h8M8 17h5"/>',
-     more:'<circle cx="6" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="18" cy="12" r="1"/>',
-     bell:'<path d="M7 10a5 5 0 0 1 10 0c0 5 2 5 2 7H5c0-2 2-2 2-7Z"/><path d="M10 21h4"/>'
-   },
-   fresh:{
-     home:'<path d="M3.5 10.5 12 3.7l8.5 6.8v9.7a1.8 1.8 0 0 1-1.8 1.8H5.3a1.8 1.8 0 0 1-1.8-1.8Z"/><path d="M9 21v-5.5h6V21"/><circle cx="17.2" cy="6" r="1.2" fill="currentColor" stroke="none"/>',
-     calendar:'<rect x="3.5" y="5" width="17" height="16" rx="4"/><path d="M7.5 3.5v3M16.5 3.5v3M3.5 10h17"/><circle cx="8" cy="14" r="1" fill="currentColor" stroke="none"/><circle cx="12" cy="14" r="1" fill="currentColor" stroke="none"/><circle cx="16" cy="14" r="1" fill="currentColor" stroke="none"/>',
-     jobs:'<rect x="4" y="6" width="16" height="14" rx="4"/><path d="M9 6V4.5h6V6M7.5 13h9"/>',
-     booker:'<circle cx="12" cy="8" r="3.3"/><path d="M4.8 20c.8-3.8 3.2-5.7 7.2-5.7s6.4 1.9 7.2 5.7"/><circle cx="19" cy="5" r="1.2" fill="currentColor" stroke="none"/>',
-     note:'<path d="M5 4h12l2 2v14H5Z"/><path d="M8 9h7M8 13h7M8 17h4"/>',
-     more:'<circle cx="6" cy="12" r="1.5" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none"/><circle cx="18" cy="12" r="1.5" fill="currentColor" stroke="none"/>',
-     bell:'<path d="M12 4.2a5.3 5.3 0 0 1 5.3 5.3v2.6c0 2.3 1.8 3.4 2.2 4.7H4.5c.4-1.3 2.2-2.4 2.2-4.7V9.5A5.3 5.3 0 0 1 12 4.2Z"/><circle cx="12" cy="20" r="1.3" fill="currentColor" stroke="none"/>'
-   },
-   pink:{
-     home:'<path d="M4 10 12 3l8 7v10H4Z"/><path d="M8 21v-7h8v7"/>',
-     calendar:'<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M7 2v4M17 2v4M3 9h18M8 13h2M14 13h2M8 17h2"/>',
-     jobs:'<rect x="3" y="6" width="18" height="15" rx="2"/><path d="M9 6V4h6v2M7 13h10M7 16h6"/>',
-     booker:'<circle cx="12" cy="8" r="2.8"/><path d="M5 21c.8-3.9 3.1-5.8 7-5.8s6.2 1.9 7 5.8"/>',
-     note:'<path d="M4 3h14l2 2v16H4Z"/><path d="M8 8h7M8 12h7M8 16h5"/>',
-     more:'<rect x="4" y="10.5" width="16" height="3" rx="1.5"/>',
-     bell:'<path d="M7 10a5 5 0 0 1 10 0v3l2 3H5l2-3Z"/><path d="M10 20h4"/>'
-   },
-   tiki:{
-     home:'<path d="m3.2 10.2 8.8-7 8.8 7"/><path d="M5.2 9v11.8h13.6V9"/><path d="M9.2 20.8v-6h5.6v6"/><path d="m17.6 4.2.7-1.2.7 1.2 1.3.2-1 .9.2 1.3-1.2-.6-1.2.6.2-1.3-1-.9Z" fill="currentColor" stroke="none"/>',
-     calendar:'<rect x="3" y="5" width="18" height="16" rx="5"/><path d="M7 3v4M17 3v4M3 10h18"/><circle cx="8" cy="15" r="1.4" fill="currentColor" stroke="none"/><circle cx="12" cy="15" r="1.4" fill="currentColor" stroke="none"/><circle cx="16" cy="15" r="1.4" fill="currentColor" stroke="none"/>',
-     jobs:'<path d="M5 7h14l-1 12H6Z"/><path d="M9 7a3 3 0 0 1 6 0"/><path d="M8.5 12h7"/>',
-     booker:'<circle cx="12" cy="8" r="3.1"/><path d="M5 20c1-3.5 3.3-5.2 7-5.2s6 1.7 7 5.2"/><circle cx="18.5" cy="4.8" r="1.3" fill="currentColor" stroke="none"/>',
-     note:'<rect x="4" y="4" width="16" height="17" rx="4"/><path d="M8 9h8M8 13h7M8 17h4"/>',
-     more:'<circle cx="6" cy="12" r="1.7" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.7" fill="currentColor" stroke="none"/><circle cx="18" cy="12" r="1.7" fill="currentColor" stroke="none"/>',
-     bell:'<path d="M12 4c3.1 0 5.2 2.5 5.2 5.4v2.5c0 2.1 1.7 3.2 2.2 4.5H4.6c.5-1.3 2.2-2.4 2.2-4.5V9.4C6.8 6.5 8.9 4 12 4Z"/><path d="M9.8 20.3c1.1 1.2 3.3 1.2 4.4 0"/>'
-   },
-   green:{
-     home:'<path d="M4 10.5 12 4l8 6.5V20H4Z"/><path d="M9 20v-5h6v5"/><path d="M12 7.5v2.2"/>',
-     calendar:'<rect x="3" y="5" width="18" height="16" rx="4"/><path d="M7 3v4M17 3v4M3 10h18"/><path d="M8 15h3M14 15h2M8 18h5"/>',
-     jobs:'<path d="M5 7h14v13H5Z"/><path d="M9 7V5h6v2M9 13h6M12 13v4"/>',
-     booker:'<circle cx="12" cy="8" r="3"/><path d="M5.5 20c.9-3.6 3.1-5.3 6.5-5.3s5.6 1.7 6.5 5.3"/><path d="m18.4 5.3 2.1 2.1"/>',
-     note:'<path d="M5 4h14v16H5Z"/><path d="M8 8h8M8 12h8M8 16h5"/><path d="M17 17h2v2"/>',
-     more:'<circle cx="6" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="18" cy="12" r="1.2"/>',
-     bell:'<path d="M7 10a5 5 0 0 1 10 0v3.2l2 2.8H5l2-2.8Z"/><path d="M10 20h4"/>'
-   }
- };
- const theme=state?.settings?.theme||"fresh";
- if(variants[theme]?.[name]) p[name]=variants[theme][name];
+ const theme=state?.settings?.theme||"pop";
  return `<svg class="${name}-icon theme-icon-${theme}" viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="${theme==="pop"?2.3:1.8}" stroke-linecap="round" stroke-linejoin="round">${p[name]||p.more}</svg>`;
 }
 function makeId(){try{if(window.crypto?.randomUUID)return window.crypto.randomUUID();}catch(_){}return "id-"+Date.now().toString(36)+"-"+Math.random().toString(36).slice(2,10);}
@@ -808,7 +785,7 @@ more(){
   <div class="setting-card"><div class="setting-icon">${icon("calendar",18)}</div><div class="setting-main"><b>Số show tháng này</b><span>${state.settings.showCountVisible?"Đang hiển thị":"Đang ẩn mặc định"}</span></div><button class="small-black" onclick="toggleShowCountSetting()">${state.settings.showCountVisible?"Ẩn":"Hiện"}</button></div>
  </div>
  <section class="section"><div class="section-head"><h2>Loại show</h2><button class="black-btn" onclick="addJobType()">${icon("plus",14)} Thêm loại</button></div><div class="type-settings-list">${state.settings.jobTypes.map((t,i)=>{const c=typeMeta(t.name);return `<div class="type-setting-row"><span class="tag type-tag" style="--type-bg:${c.bg};--type-color:${c.color};--type-border:${c.border}">${esc(t.name)}</span><div class="type-setting-actions"><button class="mini-btn" onclick="renameJobType('${t.id}')">Sửa</button><button class="mini-btn danger-mini" onclick="deleteJobType('${t.id}')">Xóa</button></div></div>`}).join("")}</div></section>
- <section class="section"><div class="section-head"><h2>Giao diện</h2><span class="small">6 phong cách</span></div><div class="theme-grid">${themeCard("pop","Super App ✦","Cam • nhiều màu • icon chi tiết","linear-gradient(135deg,#fff3ec,#f5f6fa)","linear-gradient(135deg,#ff8a3d,#ff4b2b)",state.settings.theme)}${themeCard("clean","Clean Neutral","Trắng • beige • đen","#f7f4ef","#171717",state.settings.theme)}${themeCard("fresh","Fresh Friendly","Pastel • trẻ • vui","#f5f6ff","#7667ee",state.settings.theme)}${themeCard("pink","Pink Cute","Hồng • dễ thương • mềm mại","#fff3f8","#ff5f9a",state.settings.theme)}${themeCard("tiki","Tiki-inspired","Xanh cyan • trắng • cam","#eef9ff","#00a6e9",state.settings.theme)}${themeCard("green","Green-inspired","Cyan • xanh lá • sạch","#effdf8","#00b894",state.settings.theme)}</div></section>
+ <section class="section"><div class="section-head"><h2>Giao diện</h2><span class="small">2 phong cách · mỗi máy chọn riêng</span></div><div class="theme-grid two-themes">${themeCard("pop","Super App ✦","Sáng · cam rực · icon nhiều màu · hiệu ứng vui, nảy, pháo giấy",state.settings.theme)}${themeCard("stage","Sân khấu ✧","Tối · vàng gold · icon nét mảnh phát sáng · ánh đèn, kim tuyến",state.settings.theme)}</div><div class="small pay-note">Đổi giao diện xong, biểu tượng ngoài Màn hình chính chỉ đổi khi bạn xoá và thêm lại app.</div></section>
  <section class="section"><div class="card subtle-box"><div class="eyebrow">ĐỒNG BỘ</div><h3>${localMode?"LOCAL TEST MODE":backendReady?"Cloud sync đã sẵn sàng":"Chưa kết nối cloud"}</h3><p>${localMode?"Dữ liệu chỉ nằm trên MacBook này; không ghi lên cloud.":"Dữ liệu được lưu trên máy chủ Cloudflare riêng của bạn để mọi máy dùng chung một bộ dữ liệu."}</p></div></section>`;
 }}
 function setAppName(){
@@ -821,12 +798,11 @@ function setAppName(){
   document.title=clean;
   render();
 }
-function themeCard(id,title,desc,bg,accent,current){return `<button class="theme-card ${current===id?"active":""}" onclick="setTheme('${id}')"><div class="theme-preview" style="background:${bg}"><span style="background:${accent}"></span><i style="background:${accent}"></i><em style="background:${accent}"></em></div><div class="theme-copy"><b>${title}</b><span>${desc}</span></div>${current===id?'<div class="theme-check">✓</div>':''}</button>`;}
-function setTheme(theme){try{localStorage.setItem("mcta_theme",arguments[0]);}catch(_){}
+function themeCard(id,title,desc,current){return `<button class="theme-card theme-${id} ${current===id?"active":""}" onclick="setTheme('${id}')"><div class="theme-preview tp-${id}"><img src="icons/app-${id}-192.png" alt=""><div class="tp-ui"><i></i><i></i><i></i></div><div class="tp-icons">${["home","calendar","jobs","note","more"].map(n=>id==="stage"?stageIcon(n,18):(popIcon(n,18)||"")).join("")}</div></div><div class="theme-copy"><b>${title}</b><span>${desc}</span></div>${current===id?'<div class="theme-check">✓</div>':""}</button>`;}
+function setTheme(theme){if(!THEMES.includes(theme))theme="pop";try{localStorage.setItem("mcta_theme",theme);}catch(_){}
   state.settings.theme=theme;
   document.documentElement.dataset.theme=theme;
-  const colors={clean:"#f7f4ef",fresh:"#f3f9fe",pink:"#fff3f8",tiki:"#eef9ff",green:"#effdf8",pop:"#f5f6fa"};
-  document.querySelector('meta[name="theme-color"]')?.setAttribute("content",colors[theme]||colors.fresh);
+  document.querySelector('meta[name="theme-color"]')?.setAttribute("content",THEME_BG[theme]);
   save();render();
 }
 function dateBlock(ds,extra=""){const d=new Date(ds+"T00:00:00");if(isNaN(d))return `<div class="tl-date ${extra}"><b>—</b></div>`;return `<div class="tl-date ${extra}"><span>${WEEKDAYS[d.getDay()]}</span><b>${d.getDate()}</b><small>Th${d.getMonth()+1}</small></div>`;}
@@ -1284,7 +1260,7 @@ function syncView(st){const o={settings:sharedSettingsStr(st),deleted:st.deleted
 function adoptState(next){
   const keep={};DEVICE_SETTINGS.forEach(k=>{if(k!=="_u"&&state?.settings&&k in state.settings)keep[k]=state.settings[k];});
   const before=state?syncView(state):"";
-  initializeState(next);Object.assign(state.settings,keep);
+  initializeState(next);Object.assign(state.settings,keep);if(!THEMES.includes(state.settings.theme))state.settings.theme="pop";document.documentElement.dataset.theme=state.settings.theme;
   takeSnapshot();localStorage.setItem(KEY,JSON.stringify(state));
   if(syncView(state)!==before)softRender();
 }
@@ -1358,7 +1334,7 @@ function buildPlan(st,now){
   const out=[],s=st?.settings||{},hhmm=t=>/^\d{2}:\d{2}$/.test(t||"")?t:null,vnMs=(d,t)=>Date.parse(`${d}T${t}:00+07:00`);
   const end=now+PLAN_DAYS*86400000,ddmm=d=>{const p=(d||"").split("-");return p.length===3?`${p[2]}/${p[1]}`:d;};
   const when=m=>m>=1440?`còn ${Math.round(m/1440)} ngày`:m>=60?`còn ${Math.round(m/60)} giờ`:m>0?`còn ${m} phút`:"bắt đầu ngay";
-  const icon=`icons/app-${["clean","fresh","pink","tiki","green","pop"].includes(s.theme)?s.theme:"fresh"}-192.png`;
+  const icon=`icons/app-${THEMES.includes(s.theme)?s.theme:"pop"}-192.png`;
   const add=(at,it)=>{if(Number.isFinite(at)&&at>now&&at<end)out.push({at,icon,...it});};
   for(const job of st?.jobs||[]){
     if(!job?.id||!job.date)continue;const url=`./?job=${encodeURIComponent(job.id)}`,title=job.title||"Show";
@@ -1611,6 +1587,8 @@ function celebrate(text){
   const d=document.createElement("div");d.className="mc-stamp";d.innerHTML=`<span>${esc(text)}</span>`;
   for(let i=0;i<14;i++){const b=document.createElement("i");b.style.setProperty("--a",(i*360/14)+"deg");b.style.setProperty("--d",(70+Math.random()*60)+"px");b.style.setProperty("--h",(i*47)%360);d.appendChild(b);}
   document.body.appendChild(d);setTimeout(()=>d.classList.add("out"),1050);setTimeout(()=>d.remove(),1500);
+  // Sân khấu: mưa kim tuyến vàng
+  if(state.settings.theme==="stage"){for(let i=0;i<46;i++){const g=document.createElement("i");g.className="mc-glitter";g.style.left=(Math.random()*100)+"vw";g.style.setProperty("--x",(Math.random()*80-40)+"px");g.style.setProperty("--r",(360+Math.random()*720)*(Math.random()<.5?-1:1)+"deg");g.style.setProperty("--d",(Math.random()*.45)+"s");g.style.setProperty("--t",(1.3+Math.random()*1.1)+"s");if(i%3===0){g.style.width="5px";g.style.height="5px";g.style.borderRadius="50%";}document.body.appendChild(g);setTimeout(()=>g.remove(),3200);}}
 }
 // Kéo xuống ở đầu trang để lấy dữ liệu mới từ máy chủ
 (function pullToRefresh(){

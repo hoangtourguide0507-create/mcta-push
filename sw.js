@@ -1,7 +1,6 @@
 // V26.0 — mở app tức thì từ bộ nhớ đệm; bản mới được tải ngầm và áp dụng ở lần mở sau.
-const CACHE="freelance-planner-v28-4";
-const ASSETS=["./","./index.html","./style.css","./app.js","./sync-merge.js","./manifest.json","./manifest-clean.json","./manifest-fresh.json","./manifest-pink.json","./manifest-tiki.json","./manifest-green.json","./manifest-pop.json",
-"./icons/app-fresh-192.png","./icons/app-pop-192.png","./icons/app-pink-192.png","./icons/app-tiki-192.png","./icons/app-green-192.png","./icons/app-clean-192.png"];
+const CACHE="freelance-planner-v28-6";
+const ASSETS=["./","./index.html","./style.css","./app.js","./sync-merge.js","./manifest.json","./manifest-pop.json","./manifest-stage.json","./icons/app-pop-192.png","./icons/app-stage-192.png"];
 self.addEventListener("install",e=>{self.skipWaiting();e.waitUntil(caches.open(CACHE).then(async c=>{for(const a of ASSETS){try{await c.add(new Request(a,{cache:"reload"}))}catch(_){}}}));});
 self.addEventListener("activate",e=>e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE&&k.startsWith("freelance-planner-")).map(k=>caches.delete(k)))).then(()=>self.clients.claim())));
 self.addEventListener("fetch",e=>{
@@ -25,7 +24,7 @@ async function setBadgeFromTray(){
 self.addEventListener("push",e=>{
   let data={};try{data=e.data?e.data.json():{};}catch(_){data={body:e.data?e.data.text():""};}
   const title=data.title||"MC Thiên Ân";
-  const opts={body:data.body||"Bạn có một việc cần xem.",icon:data.icon||"icons/app-fresh-192.png",badge:data.icon||"icons/app-fresh-192.png",tag:data.tag||"mcta",renotify:true,timestamp:Date.now(),data:{url:data.url||"./",kind:data.kind||""}};
+  const opts={body:data.body||"Bạn có một việc cần xem.",icon:data.icon||"icons/app-pop-192.png",badge:data.icon||"icons/app-pop-192.png",tag:data.tag||"mcta",renotify:true,timestamp:Date.now(),data:{url:data.url||"./",kind:data.kind||""}};
   e.waitUntil((async()=>{
     // iOS bắt buộc: mỗi lần nhận push PHẢI hiện thông báo, nếu không iOS sẽ huỷ quyền nhận.
     await self.registration.showNotification(title,opts);

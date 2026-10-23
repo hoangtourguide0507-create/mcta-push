@@ -3,18 +3,18 @@
   "short_name": "MC Thiên Ân",
   "start_url": "./",
   "display": "standalone",
-  "background_color": "#ffffff",
-  "theme_color": "#ffffff",
+  "background_color": "#0c0c13",
+  "theme_color": "#0c0c13",
   "description": "MC Thiên Ân - personal freelance planner.",
   "icons": [
     {
-      "src": "icons/app-green-192.png",
+      "src": "icons/app-stage-192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any maskable"
     },
     {
-      "src": "icons/app-green-512.png",
+      "src": "icons/app-stage-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"
