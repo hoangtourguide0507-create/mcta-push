@@ -402,18 +402,28 @@ function mapsEmbedUrl(j,key){
   const q=j.placeId?`place_id:${encodeURIComponent(j.placeId)}`:encodeURIComponent([j.locationName||j.location||"",j.locationAddress||""].filter(Boolean).join(", "));
   return `https://www.google.com/maps/embed/v1/place?key=${encodeURIComponent(key)}&q=${q}&zoom=16&language=vi`;
 }
+function jobLatLng(j){const a=Number(j.locationLat),b=Number(j.locationLng);return j.locationLat!==""&&j.locationLat!=null&&j.locationLng!==""&&j.locationLng!=null&&Number.isFinite(a)&&Number.isFinite(b)&&(a||b)?`${a},${b}`:"";}
 async function hydrateJobMap(j){
   const wrap=document.getElementById("jobMapWrap");
   if(!wrap)return;
-  const cfg=await loadMapsConfig();
-  if(!cfg.apiKey){
-    const q=placeQueryText(j.locationName||j.location,j.locationAddress);
-    if(!q){wrap.innerHTML=`<div class="map-placeholder"><div class="map-placeholder-icon">${icon("pin",22)}</div><b>Chưa có địa điểm</b><span class="small">Bấm Chỉnh sửa để thêm tên nơi tổ chức và địa chỉ.</span></div>`;return;}
-    wrap.innerHTML=`<div class="embedded-map-card"><iframe title="Bản đồ ${esc(q)}" src="${freeMapEmbedUrl(q)}" loading="lazy" allowfullscreen referrerpolicy="no-referrer-when-downgrade"></iframe></div>${travelButtons(q,j.googleMapsURI)}`;
-    return;
+  let q=placeQueryText(j.locationName||j.location,j.locationAddress),ll=jobLatLng(j);
+  // Job chỉ có link Google Maps (chưa có tên/toạ độ) → mở link để lấy địa điểm rồi lưu lại vào job.
+  if(!ll&&j.googleMapsURI&&!j._mapsTried){
+    if(!q)wrap.innerHTML=`<div class="map-placeholder"><div class="map-placeholder-icon">${icon("pin",22)}</div><b>Đang đọc link Google Maps…</b></div>`;
+    j._mapsTried=true;const info=await mapsLinkInfo(j.googleMapsURI);
+    if(info&&(info.lat!=null||info.name)){const cur=state.jobs.find(x=>x.id===j.id)||j;
+      if(info.lat!=null){cur.locationLat=info.lat;cur.locationLng=info.lng;}
+      if(!cur.locationName&&!cur.location&&info.name){cur.locationName=cur.location=info.name;}
+      if(!cur.locationAddress&&info.address)cur.locationAddress=info.address;
+      delete cur._mapsTried;save();j=cur;q=placeQueryText(j.locationName||j.location,j.locationAddress);ll=jobLatLng(j);
+      if(!document.getElementById("jobMapWrap"))return;
+      const hero=document.querySelector("#modalCard .job-hero span");if(hero&&j.locationName)hero.textContent=j.locationName+(j.locationAddress?` • ${j.locationAddress}`:"");}
   }
-  const url=mapsEmbedUrl(j,cfg.apiKey);
-  wrap.innerHTML=`<div class="embedded-map-card"><iframe title="Bản đồ ${esc(j.locationName||j.location||"")}" src="${url}" loading="lazy" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe></div>${travelButtons(placeQueryText(j.locationName||j.location,j.locationAddress),j.googleMapsURI)}`;
+  const target=ll||q;
+  if(!target){wrap.innerHTML=j.googleMapsURI?`<div class="map-placeholder"><div class="map-placeholder-icon">${icon("pin",22)}</div><b>Có link Google Maps</b><span class="small">Chưa đọc được vị trí từ link — bấm để mở bản đồ.</span></div>${travelButtons("",j.googleMapsURI)}`:`<div class="map-placeholder"><div class="map-placeholder-icon">${icon("pin",22)}</div><b>Chưa có địa điểm</b><span class="small">Bấm Chỉnh sửa để thêm tên nơi tổ chức, địa chỉ hoặc dán link Google Maps.</span></div>`;return;}
+  const cfg=await loadMapsConfig();
+  const url=cfg.apiKey?(ll?`https://www.google.com/maps/embed/v1/place?key=${encodeURIComponent(cfg.apiKey)}&q=${encodeURIComponent(ll)}&zoom=16&language=vi`:mapsEmbedUrl(j,cfg.apiKey)):freeMapEmbedUrl(target);
+  wrap.innerHTML=`<div class="embedded-map-card"><iframe title="Bản đồ ${esc(q||ll)}" src="${url}" loading="lazy" allowfullscreen referrerpolicy="${cfg.apiKey?"strict-origin-when-cross-origin":"no-referrer-when-downgrade"}"></iframe></div>${travelButtons(q||ll,j.googleMapsURI)}`;
 }
 function saveBrowserMapsKey(){
   const input=document.getElementById("browserMapsKeyInput");
@@ -430,13 +440,39 @@ function directionsUrl(q,link){const u=safeHref(link);if(u)return u;return `http
 function appleMapsUrl(q){return `https://maps.apple.com/?daddr=${encodeURIComponent(q)}&dirflg=d`;}
 async function copyText(t,btn){try{await navigator.clipboard.writeText(t);}catch(_){const a=document.createElement("textarea");a.value=t;document.body.appendChild(a);a.select();try{document.execCommand("copy")}catch(_){}a.remove();}if(btn){const o=btn.innerHTML;btn.textContent="Đã copy ✓";setTimeout(()=>btn.innerHTML=o,1400);}}
 function travelButtons(q,link){if(!q&&!link)return"";return `<div class="travel-actions"><a class="travel-btn primary" href="${esc(directionsUrl(q,link))}" target="_blank" rel="noopener">${icon("pin",14)} Chỉ đường Google Maps</a><a class="travel-btn" href="${esc(appleMapsUrl(q||link))}" target="_blank" rel="noopener">Apple Maps</a>${q?`<button type="button" class="travel-btn" onclick="copyText(this.dataset.q,this)" data-q="${esc(q)}">Copy địa chỉ</button>`:""}</div>`;}
-/* Dán nội dung "Chia sẻ" từ app Google Maps: tách tên, địa chỉ và link */
+/* Dán nội dung "Chia sẻ" hoặc chỉ link từ app Google Maps: tách tên, địa chỉ, toạ độ */
+const MAPS_URL_RE=/(google\.[a-z.]+\/maps|maps\.app\.goo\.gl|goo\.gl\/maps|maps\.google\.|share\.google|g\.co\/kgs)/i;
 function parseMapsShare(text){
   const t=String(text||"").trim();const m=t.match(/https?:\/\/\S+/);
   if(!m)return null;
-  const url=m[0];if(!/(google\.[a-z.]+\/maps|maps\.app\.goo\.gl|goo\.gl\/maps|maps\.google\.)/i.test(url))return null;
+  const url=m[0];if(!MAPS_URL_RE.test(url))return null;
   const lines=t.replace(url,"").split(/\n+/).map(x=>x.trim()).filter(Boolean);
   return {url,name:lines[0]||"",address:lines.slice(1).join(", ")};
+}
+function isShortMaps(u){return /^https?:\/\/(maps\.app\.goo\.gl|goo\.gl|g\.co|share\.google)\//i.test(u||"");}
+// Đọc tên / địa chỉ / toạ độ nằm sẵn trong link Google Maps đầy đủ.
+function mapsInfoFromUrl(u){
+  let url;try{url=new URL(u);}catch(_){return null;}
+  const out={url:u,name:"",address:"",lat:null,lng:null};
+  const ll=s=>{const m=String(s||"").match(/^\s*(-?\d{1,2}(?:\.\d+)?)\s*,\s*(-?\d{1,3}(?:\.\d+)?)\s*$/);return m?[Number(m[1]),Number(m[2])]:null;};
+  const split=s=>{const parts=String(s).split(",").map(x=>x.trim()).filter(Boolean);return [parts[0]||"",parts.slice(1).join(", ")];};
+  const pm=url.pathname.match(/\/maps\/(?:place|search)\/([^/]+)/);
+  if(pm){let n="";try{n=decodeURIComponent(pm[1].replace(/\+/g," "));}catch(_){n=pm[1];}const c=ll(n);if(c)[out.lat,out.lng]=c;else[out.name,out.address]=split(n);}
+  const q=url.searchParams.get("q")||url.searchParams.get("query")||url.searchParams.get("daddr")||url.searchParams.get("destination")||"";
+  if(q){const c=ll(q);if(c){if(out.lat==null)[out.lat,out.lng]=c;}else if(!out.name)[out.name,out.address]=split(q);}
+  const m=u.match(/!3d(-?\d+\.\d+)!4d(-?\d+\.\d+)/)||u.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/);
+  const c=m?[Number(m[1]),Number(m[2])]:ll(url.searchParams.get("ll")||url.searchParams.get("center")||"");
+  if(c&&out.lat==null)[out.lat,out.lng]=c;
+  return out;
+}
+const mapsLinkCache={};
+async function mapsLinkInfo(link){
+  link=String(link||"").trim();if(!/^https?:\/\//i.test(link)||!MAPS_URL_RE.test(link))return null;
+  if(mapsLinkCache[link])return mapsLinkCache[link];
+  let full=link;
+  if(isShortMaps(link)){const base=cloudUrl();if(!base)return null;
+    try{const r=await fetch(base+"/resolve?u="+encodeURIComponent(link.replace(/^http:/i,"https:")),{cache:"no-store"});const j=await r.json().catch(()=>({}));if(!j.ok||!j.url)return null;full=j.url;}catch(_){return null;}}
+  const info=mapsInfoFromUrl(full);if(info)mapsLinkCache[link]=info;return info;
 }
 function applyMapsShare(info){
   if(!info)return false;
@@ -445,10 +481,33 @@ function applyMapsShare(info){
   if(info.name){set("locationNameInput",info.name);set("locationFallback",info.name);}
   if(info.address)set("locationAddressInput",info.address);
   set("placeIdInput","");set("locationLatInput","");set("locationLngInput","");
-  const h=document.getElementById("placesHint");if(h)h.textContent=info.address?"Đã lấy tên, địa chỉ và link từ Google Maps ✓":"Đã lưu link Google Maps ✓ — bạn nhập thêm địa chỉ nếu muốn hiện trên app.";
+  const h=document.getElementById("placesHint");if(h)h.textContent=info.address?"Đã lấy tên, địa chỉ và link từ Google Maps ✓":"Đang đọc vị trí từ link Google Maps…";
+  enrichFromMapsLink(info.url);
   return true;
 }
+let mapsSeq=0;
+async function enrichFromMapsLink(link){
+  const seq=++mapsSeq,info=await mapsLinkInfo(link);
+  if(seq!==mapsSeq||document.getElementById("googleMapsURIInput")?.value.trim()!==link)return;
+  const get=id=>document.getElementById(id),h=get("placesHint");
+  if(!info||(info.lat==null&&!info.name)){if(h)h.textContent="Đã lưu link Google Maps ✓ — chưa đọc được vị trí, bạn nhập thêm tên/địa chỉ để hiện bản đồ.";updateFormMap();return;}
+  if(info.lat!=null){get("locationLatInput").value=info.lat;get("locationLngInput").value=info.lng;}
+  if(info.name&&!get("locationNameInput").value.trim()){get("locationNameInput").value=info.name;const f=get("locationFallback");if(f)f.value=info.name;}
+  if(info.address&&!get("locationAddressInput").value.trim())get("locationAddressInput").value=info.address;
+  if(h)h.textContent="Đã lấy vị trí từ link Google Maps ✓";
+  updateFormMap();
+}
 function onMapsLinkPaste(e){const txt=(e.clipboardData||window.clipboardData)?.getData("text")||"";const info=parseMapsShare(txt);if(info){e.preventDefault();applyMapsShare(info);}}
+function onMapsLinkChange(el){const info=parseMapsShare(el.value);if(info&&info.url!==el.dataset.done){el.dataset.done=info.url;if(info.name||info.address)applyMapsShare(info);else{el.value=info.url;const h=document.getElementById("placesHint");if(h)h.textContent="Đang đọc vị trí từ link Google Maps…";enrichFromMapsLink(info.url);}}}
+// Bản đồ xem trước ngay trong form sửa job.
+function updateFormMap(){
+  const box=document.getElementById("formMapPreview");if(!box)return;const g=id=>document.getElementById(id)?.value||"";
+  const lat=g("locationLatInput"),lng=g("locationLngInput");const ll=lat!==""&&lng!==""&&Number.isFinite(+lat)&&Number.isFinite(+lng)?`${+lat},${+lng}`:"";
+  const q=ll||placeQueryText(g("locationNameInput"),g("locationAddressInput"));
+  if(!q){box.innerHTML="";box.dataset.q="";return;}
+  if(box.dataset.q===q)return;box.dataset.q=q;
+  box.innerHTML=`<div class="embedded-map-card form-map"><iframe title="Bản đồ xem trước" src="${freeMapEmbedUrl(q)}" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe></div>`;
+}
 /* Gợi ý địa chỉ miễn phí từ OpenStreetMap (Photon) */
 let osmTimer=null,osmSeq=0;
 function osmAddress(pr){
@@ -477,7 +536,7 @@ function pickOsm(i){
   const x=(window._osmItems||[])[i];if(!x)return;const pr=x.pr||{};
   const set=(id,v)=>{const el=document.getElementById(id);if(el)el.value=v??"";};
   set("locationFallback",x.name||x.address);set("locationNameInput",x.name||x.address);
-  set("locationAddressInput",x.address);set("locationLatInput",x.lat??"");set("locationLngInput",x.lng??"");set("placeIdInput","");
+  set("locationAddressInput",x.address);set("locationLatInput",x.lat??"");set("locationLngInput",x.lng??"");set("placeIdInput","");setTimeout(updateFormMap,0);
   const put=(id,v)=>{const el=document.getElementById(id);if(el)el.textContent=v||"";};
   put("addressStreetNumber",pr.housenumber?`Số ${pr.housenumber}`:"");put("addressWard",pr.street||pr.locality||"");put("addressDistrict",pr.district||pr.county||"");put("addressCity",pr.city||pr.state||"");
   document.getElementById("addressBreakdown")?.classList.toggle("hidden",!(pr.housenumber||pr.street||pr.district||pr.city));
@@ -810,7 +869,8 @@ function openJobForm(existing=null,opts={}){
    <div id="placesHint" class="small form-hint">Đang kiểm tra Google Places…</div>
    <div id="placeSuggest" class="place-suggest" hidden></div>
    <label class="field"><span>Địa chỉ đầy đủ</span><input id="locationAddressInput" name="locationAddress" value="${esc(j.locationAddress||"")}" placeholder="Số nhà, đường, phường, quận, TP..."></label>
-   <label class="field"><span>Link Google Maps (không bắt buộc)</span><input id="googleMapsURIInput" name="googleMapsURI" value="${esc(j.googleMapsURI||"")}" placeholder="Dán link / nội dung Chia sẻ từ app Google Maps" onpaste="onMapsLinkPaste(event)" autocomplete="off"></label>
+   <label class="field"><span>Link Google Maps (không bắt buộc)</span><input id="googleMapsURIInput" name="googleMapsURI" value="${esc(j.googleMapsURI||"")}" placeholder="Dán link / nội dung Chia sẻ từ app Google Maps" onpaste="onMapsLinkPaste(event)" onchange="onMapsLinkChange(this)" oninput="clearTimeout(this._t);this._t=setTimeout(()=>onMapsLinkChange(this),700)" autocomplete="off" inputmode="url"></label>
+   <div id="formMapPreview"></div>
    <div class="small form-hint">Mẹo chính xác nhất: mở app Google Maps → tìm địa điểm → <b>Chia sẻ</b> → <b>Sao chép</b>, rồi dán vào ô trên.</div>
    <div id="addressBreakdown" class="address-breakdown hidden">
      <span id="addressStreetNumber"></span><span id="addressWard"></span><span id="addressDistrict"></span><span id="addressCity"></span>
@@ -1052,8 +1112,16 @@ function openNote(existing=null,opts={}){
    <div class="ne-actions">${n.id?`<button type="button" class="outline-btn danger-text" onclick="deleteNote('${n.id}',true)">Xoá</button><button type="button" class="outline-btn" onclick="saveNoteThenRead('${n.id}')">Đọc</button><button type="button" class="outline-btn" onclick="saveNoteThenExport('${n.id}')">Word</button>`:""}<button class="black-btn submit">Lưu kịch bản</button></div>
   </form>`);
   document.getElementById("modal").classList.add("editor-mode");
-  rteInit();
+  rteInit();fitEditor();
 }
+// iPhone/iPad: khi bàn phím bật, Safari đẩy trang lên nhưng màn soạn vẫn cao bằng cả màn hình → phần đang gõ bị che,
+// chạm bị lệch, có lúc không gõ/không bấm được. Giữ màn soạn vừa đúng phần nhìn thấy phía trên bàn phím.
+function fitEditor(){const m=document.getElementById("modal"),vv=window.visualViewport;if(!m||!vv)return;
+  if(!m.classList.contains("editor-mode")||m.classList.contains("hidden")){if(m.style.height){m.style.top="";m.style.height="";}return;}
+  m.style.top=vv.offsetTop+"px";m.style.height=vv.height+"px";}
+if(window.visualViewport){visualViewport.addEventListener("resize",fitEditor);visualViewport.addEventListener("scroll",fitEditor);}
+// Bàn phím đóng mà trang còn bị đẩy lệch → kéo về đúng chỗ để các nút bấm lại được.
+document.addEventListener("focusout",()=>{if(!document.documentElement.classList.contains("modal-open"))return;setTimeout(()=>{const a=document.activeElement;if(a&&(a.isContentEditable||/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)))return;if(window.scrollY)window.scrollTo(0,0);fitEditor();},120);});
 function closeNoteEditor(){if(noteDirty&&!confirm("Đóng mà không lưu thay đổi?"))return;noteDirty=false;const jid=document.querySelector("#modalCard select[name=jobId]")?.value;closeModal();if(openJobAfterNote&&jid){openJobAfterNote=false;openJob(jid);}openJobAfterNote=false;}
 function saveNoteThenRead(id){const f=document.querySelector("#modalCard form.note-editor");if(noteDirty){f.requestSubmit();setTimeout(()=>openReader(id),150);}else{closeModal();openReader(id);}}
 function deleteNote(id,fromModal){const n=state.notes.find(x=>x.id===id);if(!n)return;if(!confirm(`Xoá note “${n.title||"(Không tiêu đề)"}”? Máy trợ lý cũng sẽ xoá theo.`))return;state.notes=state.notes.filter(x=>x.id!==id);save();if(fromModal)closeModal();render();showToast("Đã xoá note");}
@@ -1145,7 +1213,7 @@ function saveNoteThenExport(id){const f=document.querySelector("#modalCard form.
 function saveNote(e,id){e.preventDefault();const d=Object.fromEntries(new FormData(e.target).entries());const ed=document.getElementById("noteBody");if(ed){d.html=sanitizeHtml(ed.innerHTML);d.body=htmlToText(d.html);}const now=new Date().toISOString();d.updatedAt=now;if(id)Object.assign(state.notes.find(n=>n.id===id),d);else state.notes.push({...d,id:makeId(),createdAt:now});noteDirty=false;save();closeModal();render();if(page==="notes"||!id)showToast("Đã lưu kịch bản ✓");const jid=d.jobId;const m=document.getElementById("modal");if(openJobAfterNote&&jid){openJobAfterNote=false;openJob(jid);}}
 var openJobAfterNote=false;
 function openModal(html){const c=document.getElementById("modalCard");c.innerHTML=html;c.scrollTop=0;c.scrollLeft=0;document.getElementById("modal").classList.remove("hidden");document.documentElement.classList.add("modal-open")}
-function closeModal(){document.getElementById("modal").classList.add("hidden");document.getElementById("modal").classList.remove("editor-mode");document.documentElement.classList.remove("modal-open");if(pendingRender){pendingRender=false;setTimeout(render,0);}}
+function closeModal(){const md=document.getElementById("modal");md.style.top="";md.style.height="";md.classList.add("hidden");document.getElementById("modal").classList.remove("editor-mode");document.documentElement.classList.remove("modal-open");if(pendingRender){pendingRender=false;setTimeout(render,0);}}
 document.getElementById("modal").addEventListener("click",e=>{if(e.target.id!=="modal")return;if(document.querySelector("#modalCard form.note-editor")){closeNoteEditor();return;}if(document.querySelector("#modalCard form.job-form")){saveDraftNow(false);showToast("Bấm × hoặc Lưu job để đóng form — nháp đã được giữ.");return;}closeModal()});
 
 function accessKey(){try{return localStorage.getItem("mcta_key")||"";}catch(_){return "";}}
@@ -1417,7 +1485,7 @@ function undoImport(){
 }
 function changeMonth(n){calendarDate=new Date(calendarDate.getFullYear(),calendarDate.getMonth()+n,1);render()}
 function parseDeepLink(){const q=new URLSearchParams(location.search);const id=q.get("job");if(id&&state?.jobs?.some(j=>j.id===id))setTimeout(()=>openJob(id),350);}
-document.addEventListener("dblclick",e=>e.preventDefault(),{passive:false});
+document.addEventListener("dblclick",e=>{if(e.target.closest&&e.target.closest("[contenteditable],input,textarea"))return;e.preventDefault();},{passive:false});
 async function startApp(){
   bootLocal();takeSnapshot();
   render();

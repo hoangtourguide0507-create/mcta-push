@@ -847,3 +847,4 @@ button{color:inherit}
 
 /* V28.0 kết nối máy chủ */
 .setup-form small{font-size:11px;color:var(--muted);line-height:1.45}.setup-form .field>span em{text-transform:none;letter-spacing:0;font-style:normal;font-weight:650}#setupMsg{color:#b0554e;min-height:16px}.setup-form .black-btn{width:100%;padding:14px}
+.form-map iframe{height:180px}#formMapPreview:empty{display:none}#formMapPreview{margin-top:2px}

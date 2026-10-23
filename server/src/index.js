@@ -16,6 +16,7 @@
  *   POST /plan    { group, items:[{tag,at,title,body,url,kind}] }  thay toàn bộ lịch nhắc của nhóm
  *   POST /devices { group }                         danh sách máy của nhóm
  *   POST /test    { sub }                           gửi thử ngay tới đúng máy đó
+ *   GET  /resolve?u=…                             mở link rút gọn Google Maps (maps.app.goo.gl) → link đầy đủ
  *   GET  /status                                  → { setup, hasState }
  *   POST /setup   { key, from }                     đặt mã truy cập lần đầu (hoặc kiểm tra mã);
  *                                                   from = địa chỉ app Netlify cũ để chép dữ liệu sang
@@ -32,6 +33,7 @@ export default {
     if (req.method === 'OPTIONS') return new Response(null, { headers: CORS });
     const u = new URL(req.url);
     if (u.pathname === '/' || u.pathname === '') return json({ ok: true, ten: 'MC Thiên Ân · máy chủ thông báo' });
+    if (u.pathname === '/resolve') return resolveMaps(u.searchParams.get('u'));
     return env.HUB.get(env.HUB.idFromName('main')).fetch(req);
   }
 };
@@ -83,6 +85,27 @@ const okSub = s => s && typeof s.endpoint === 'string' && /^https:\/\//.test(s.e
 const okGroup = g => typeof g === 'string' && /^[A-Za-z0-9_-]{16,64}$/.test(g);
 const clip = (s, n) => String(s == null ? '' : s).slice(0, n);
 const payloadOf = it => JSON.stringify({ title: clip(it.title || 'MC Thiên Ân', 80), body: clip(it.body, 240), tag: clip(it.tag || 'mcta', 100), url: clip(it.url || './', 200), kind: clip(it.kind, 16), icon: clip(it.icon, 80) || undefined });
+
+/* ---------- mở link rút gọn Google Maps ---------- */
+// App chạy trên trình duyệt không tự mở được link maps.app.goo.gl (bị chặn CORS), nên nhờ máy chủ đi theo các bước chuyển hướng.
+const MAPS_HOST = /^(maps\.app\.goo\.gl|goo\.gl|g\.co|share\.google|(www\.|maps\.)?google\.[a-z.]+|consent\.google\.[a-z.]+)$/i;
+export async function resolveMaps(raw) {
+  let url; try { url = new URL(String(raw || '').trim()); } catch (_) { return json({ ok: false, loi: 'Link không hợp lệ' }, 400); }
+  if (url.protocol !== 'https:' || !MAPS_HOST.test(url.hostname)) return json({ ok: false, loi: 'Chỉ nhận link Google Maps' }, 400);
+  for (let i = 0; i < 6; i++) {
+    if (/^consent\./i.test(url.hostname) && url.searchParams.get('continue')) { url = new URL(url.searchParams.get('continue')); continue; }
+    if (!/^(maps\.app\.goo\.gl|goo\.gl|g\.co|share\.google)$/i.test(url.hostname)) break;
+    let r; try { r = await fetch(url.href, { redirect: 'manual', headers: { 'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1', 'Accept-Language': 'vi,en;q=0.8' } }); }
+    catch (e) { return json({ ok: false, loi: 'Không mở được link' }, 502); }
+    const loc = r.headers.get('location');
+    if (loc) { const nx = new URL(loc, url); if (!MAPS_HOST.test(nx.hostname)) break; url = nx; continue; }
+    const html = r.status === 200 ? await r.text() : '';
+    const m = html.match(/https:\/\/(?:www\.|maps\.)?google\.[a-z.]+\/maps[^"'<>\s\\]*/i) || html.match(/https:\/\/maps\.google\.[a-z.]+\/?\?[^"'<>\s\\]*/i);
+    if (m) { url = new URL(m[0].replace(/&amp;/g, '&')); continue; }
+    return json({ ok: false, loi: 'Google không trả về địa điểm cho link này' }, 502);
+  }
+  return json({ ok: true, url: url.href });
+}
 
 /* ---------- đồng bộ dữ liệu (giống hàm _merge.mjs bên Netlify) ---------- */
 // Gộp theo từng mục: mục nào sửa sau thì thắng; mục đã xoá ghi "bia mộ" để máy khác cũng xoá theo.
