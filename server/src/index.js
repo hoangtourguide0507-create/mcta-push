@@ -7,6 +7,7 @@
  *  - Mọi máy trong cùng "nhóm" (iPhone MC, iPhone trợ lý, iPad) dùng chung một lịch nhắc:
  *    máy nào sửa job cũng cập nhật lịch cho cả nhóm.
  * Khoá VAPID tự tạo ở lần chạy đầu, không cần cấu hình gì thêm.
+ * Từ V28: máy chủ này cũng lưu & đồng bộ dữ liệu app (thay Netlify), bảo vệ bằng mã truy cập.
  *
  * API (JSON):
  *   GET  /vapid                                   → { publicKey }
@@ -15,10 +16,15 @@
  *   POST /plan    { group, items:[{tag,at,title,body,url,kind}] }  thay toàn bộ lịch nhắc của nhóm
  *   POST /devices { group }                         danh sách máy của nhóm
  *   POST /test    { sub }                           gửi thử ngay tới đúng máy đó
+ *   GET  /status                                  → { setup, hasState }
+ *   POST /setup   { key, from }                     đặt mã truy cập lần đầu (hoặc kiểm tra mã);
+ *                                                   from = địa chỉ app Netlify cũ để chép dữ liệu sang
+ *   GET  /state?since=…   (header x-app-key)        lấy dữ liệu
+ *   PUT  /state           (header x-app-key)        gộp & lưu dữ liệu, trả bản đã gộp
  */
 
-const CORS = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,POST,OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type', 'Access-Control-Max-Age': '86400' };
-const json = (o, s = 200) => new Response(JSON.stringify(o), { status: s, headers: { 'Content-Type': 'application/json', ...CORS } });
+const CORS = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,POST,PUT,OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type, x-app-key', 'Access-Control-Max-Age': '86400' };
+const json = (o, s = 200) => new Response(JSON.stringify(o), { status: s, headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', ...CORS } });
 const MAX_SUBS = 200, MAX_ITEMS = 500, AHEAD = 75 * 864e5, LATE = 30 * 60000;
 
 export default {
@@ -78,6 +84,29 @@ const okGroup = g => typeof g === 'string' && /^[A-Za-z0-9_-]{16,64}$/.test(g);
 const clip = (s, n) => String(s == null ? '' : s).slice(0, n);
 const payloadOf = it => JSON.stringify({ title: clip(it.title || 'MC Thiên Ân', 80), body: clip(it.body, 240), tag: clip(it.tag || 'mcta', 100), url: clip(it.url || './', 200), kind: clip(it.kind, 16), icon: clip(it.icon, 80) || undefined });
 
+/* ---------- đồng bộ dữ liệu (giống hàm _merge.mjs bên Netlify) ---------- */
+// Gộp theo từng mục: mục nào sửa sau thì thắng; mục đã xoá ghi "bia mộ" để máy khác cũng xoá theo.
+const COLLS = ['jobs', 'bookers', 'notes', 'vendors'], TOMB_KEEP_MS = 180 * 864e5, CHUNK = 100000;
+export function mergeStates(a, b) {
+  if (!a) return b; if (!b) return a;
+  const out = { ...a, ...b }, now = Date.now(), deleted = {};
+  for (const c of COLLS) {
+    const del = {};
+    for (const src of [a.deleted?.[c] || {}, b.deleted?.[c] || {}]) for (const [id, t] of Object.entries(src)) { if (now - t < TOMB_KEEP_MS) del[id] = Math.max(del[id] || 0, t); }
+    const map = new Map();
+    for (const it of (a[c] || [])) if (it && it.id) map.set(it.id, it);
+    for (const it of (b[c] || [])) { if (!it || !it.id) continue; const old = map.get(it.id); if (!old || (it._u || 0) > (old._u || 0)) map.set(it.id, it); }
+    out[c] = [...map.values()].filter(it => !del[it.id] || (it._u || 0) > del[it.id]);
+    deleted[c] = del;
+  }
+  const sa = a.settings || {}, sb = b.settings || {};
+  out.settings = { ...((sb._u || 0) > (sa._u || 0) ? sb : sa) };
+  out.deleted = deleted;
+  out.updatedAt = [a.updatedAt, b.updatedAt].filter(Boolean).sort().pop() || new Date().toISOString();
+  return out;
+}
+const okState = o => o && typeof o === 'object' && Array.isArray(o.jobs) && Array.isArray(o.bookers);
+
 export class Hub {
   constructor(state, env) { this.state = state; this.st = state.storage; this.env = env; }
 
@@ -89,6 +118,67 @@ export class Hub {
     if (r.status === 404 || r.status === 410) { await this.st.delete('sub:' + await sha(sub.endpoint)); return 'gone'; }
     if (r.ok) { const k = 'sub:' + await sha(sub.endpoint), rec = await this.st.get(k); if (rec) await this.st.put(k, { ...rec, lastOkAt: Date.now() }); }
     return r.ok ? 'ok' : 'err' + r.status;
+  }
+
+  // Dữ liệu lưu thành nhiều mảnh ~100 KB để không chạm giới hạn kích thước một ô lưu trữ.
+  async getState() {
+    const m = await this.st.get('state:meta'); if (!m) return null;
+    const keys = Array.from({ length: m.n }, (_, i) => 'state:' + i), got = await this.st.get(keys);
+    return JSON.parse(keys.map(k => got.get(k) || '').join(''));
+  }
+  async putState(obj) {
+    const str = JSON.stringify(obj), parts = [];
+    for (let i = 0; i < str.length; i += CHUNK) parts.push(str.slice(i, i + CHUNK));
+    const old = (await this.st.get('state:meta'))?.n || 0, rec = {};
+    parts.forEach((x, i) => rec['state:' + i] = x);
+    rec['state:meta'] = { n: parts.length, updatedAt: obj.updatedAt || null, size: str.length };
+    await this.st.put(rec);
+    for (let i = parts.length; i < old; i++) await this.st.delete('state:' + i);
+  }
+  async keyOk(k) { const h = await this.st.get('auth'); if (!h) return null; return (await sha('key:' + String(k || '').trim())) === h; }
+
+  async data(req, p) {
+    if (p === '/status') { const m = await this.st.get('state:meta'); return json({ ok: true, setup: !!(await this.st.get('auth')), hasState: !!m, updatedAt: m?.updatedAt || null }); }
+    if (p === '/setup') {
+      if (req.method !== 'POST') return json({ ok: false }, 405);
+      const q = await req.json().catch(() => ({})), key = String(q.key || '').trim();
+      if (key.length < 4) return json({ ok: false, loi: 'Mã truy cập cần ít nhất 4 ký tự' }, 400);
+      const ok = await this.keyOk(key);
+      if (ok === false) return json({ ok: false, loi: 'Sai mã truy cập' }, 401);
+      let migrated = null;
+      if (q.from) {
+        let u = String(q.from).trim().replace(/\/+$/, ''); if (!/^https?:\/\//i.test(u)) u = 'https://' + u;
+        if (!/^https:\/\/[A-Za-z0-9.-]+$/.test(u)) return json({ ok: false, loi: 'Địa chỉ Netlify chưa đúng' }, 400);
+        let r; try { r = await fetch(u + '/api/state', { headers: { 'x-app-key': key, 'Cache-Control': 'no-store' } }); } catch (e) { return json({ ok: false, loi: 'Không mở được ' + u }, 502); }
+        if (r.status === 401) return json({ ok: false, loi: 'Netlify báo sai mã truy cập — nhập đúng mã đang dùng trên app cũ' }, 400);
+        const j = await r.json().catch(() => null);
+        if (!r.ok || !j || !okState(j.state)) return json({ ok: false, loi: 'Không đọc được dữ liệu từ ' + u + ' (kiểm tra lại địa chỉ app Netlify)' }, 502);
+        const cur = await this.getState();
+        await this.putState(mergeStates(cur, j.state));
+        migrated = j.state.jobs.length;
+      }
+      if (ok === null) await this.st.put('auth', await sha('key:' + key));
+      return json({ ok: true, created: ok === null, migrated });
+    }
+    // /state
+    const ok = await this.keyOk(req.headers.get('x-app-key'));
+    if (ok === null) return json({ ok: false, error: 'setup', needSetup: true }, 401);
+    if (!ok) return json({ ok: false, error: 'unauthorized' }, 401);
+    if (req.method === 'GET') {
+      const meta = await this.st.get('state:meta'); if (!meta) return json({ state: null, updatedAt: null });
+      const since = new URL(req.url).searchParams.get('since');
+      if (since && since === meta.updatedAt) return json({ unchanged: true, updatedAt: meta.updatedAt });
+      const state = await this.getState(); return json({ state, updatedAt: state.updatedAt || null });
+    }
+    if (req.method === 'PUT') {
+      const body = await req.json().catch(() => null);
+      if (!okState(body)) return json({ error: 'Invalid state' }, 400);
+      body.updatedAt = body.updatedAt || new Date().toISOString();
+      const merged = mergeStates(await this.getState(), body);
+      await this.putState(merged);
+      return json({ ok: true, updatedAt: merged.updatedAt, state: merged });
+    }
+    return json({ error: 'Method not allowed' }, 405);
   }
 
   async subsOf(group) { const S = await this.st.list({ prefix: 'sub:' }); return [...S.values()].filter(r => r.group === group); }
@@ -122,6 +212,7 @@ export class Hub {
     const u = new URL(req.url), p = u.pathname;
     try {
       if (p === '/vapid') return json({ publicKey: (await this.vapid()).pub });
+      if (p === '/state' || p === '/setup' || p === '/status') return await this.data(req, p);
       if (!['/plan', '/devices', '/sub', '/unsub', '/test'].includes(p)) return json({ ok: false, loi: 'Không có đường dẫn này' }, 404);
       if (req.method !== 'POST') return json({ ok: false, loi: 'Sai phương thức' }, 405);
       const q = await req.json().catch(() => ({}));

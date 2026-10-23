@@ -7,7 +7,7 @@
   "devDependencies": { "wrangler": "^4.0.0" },
   "cloudflare": {
     "bindings": {
-      "HUB": { "description": "Bộ nhớ hẹn giờ thông báo (Durable Object) — giữ nguyên mặc định." }
+      "HUB": { "description": "Bộ nhớ dữ liệu & hẹn giờ thông báo (Durable Object) — giữ nguyên mặc định." }
     }
   }
 }

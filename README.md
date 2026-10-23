@@ -1,18 +1,17 @@
-# MC Thiên Ân · máy chủ thông báo
+# MC Thiên Ân Planner
 
-Máy chủ gửi thông báo (Web Push) cho app **MC Thiên Ân Planner**. App trên Netlify vẫn lo dữ liệu; máy chủ này chỉ hẹn giờ và gửi thông báo nhắc show, lịch họp, thu tiền tới mọi máy — kể cả khi app đang đóng.
+Sổ lịch show cá nhân của MC Thiên Ân. Từ V28 app chạy trên **GitHub Pages**; dữ liệu và thông báo nằm trên **máy chủ Cloudflare** riêng (thư mục `server/`). Kho này chỉ chứa mã, không chứa dữ liệu show.
 
-## Cài đặt (một lần, không cần Terminal)
+- App: https://hoangtourguide0507-create.github.io/mcta-push/
+- Máy chủ: Cloudflare Worker `mcta-push` (Durable Object lưu dữ liệu + hẹn giờ thông báo), mã nguồn ở `server/`.
 
-[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/hoangtourguide0507-create/mcta-push)
+## Mở lần đầu trên một máy
+1. Mở địa chỉ app bằng **Safari** → nút Chia sẻ → **Thêm vào MH chính** → mở app từ biểu tượng mới.
+2. App hỏi **mã truy cập dữ liệu** → nhập mã (giống nhau trên mọi máy).
+3. Khác → Thông báo → **Bật thông báo trên máy này**.
 
-1. Bấm nút **Deploy to Cloudflare** ở trên.
-2. Đăng nhập Cloudflare (hoặc đăng ký miễn phí bằng email).
-3. Cho phép Cloudflare kết nối GitHub nếu được hỏi.
-4. Giữ nguyên các tên mặc định → bấm **Create and deploy** → chờ 1–2 phút.
-5. Copy địa chỉ dạng `https://mcta-push.<tên>.workers.dev` mà Cloudflare hiện ra.
-6. Trên iPhone: app MC Thiên Ân → **Khác → Thông báo → Nhập địa chỉ máy chủ thông báo** → dán → **Bật thông báo trên máy này**.
+## Chuyển dữ liệu từ Netlify (chỉ làm 1 lần)
+Khác → **Máy chủ dữ liệu & thông báo** → điền mã truy cập và địa chỉ app Netlify cũ (vd. `ten-app.netlify.app`) → **Kết nối**. Dữ liệu được chép thẳng từ Netlify sang Cloudflare.
 
-Kiểm tra: mở địa chỉ ở bước 5 trên trình duyệt, thấy `{"ok":true,"ten":"MC Thiên Ân · máy chủ thông báo"}` là máy chủ đang chạy.
-
-Gói Cloudflare Workers miễn phí là đủ dùng. Kho này chỉ chứa mã máy chủ, không chứa dữ liệu show.
+## Cập nhật app
+Mỗi lần đổi `app.js` / `style.css` thì tăng `CACHE` trong `sw.js` và `?v=` trong `index.html` để điện thoại nhận bản mới.

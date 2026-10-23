@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,minimum-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#f5f6ff">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="MC Thiên Ân">
+<link id="themeAppIcon" rel="apple-touch-icon" href="icons/app-fresh-180.png">
+<link id="themeManifest" rel="manifest" href="manifest-fresh.json">
+<style>
+html,body{margin:0;background:#f5f6fa}
+#splash{position:fixed;inset:0;z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:#f5f6fa;font:600 13px -apple-system,BlinkMacSystemFont,sans-serif;color:#7c8295;transition:opacity .3s}
+#splash.gone{opacity:0;pointer-events:none}
+#splash img{width:84px;height:84px;border-radius:22px;box-shadow:0 10px 28px rgba(0,0,0,.12)}
+#splash i{width:26px;height:26px;border:3px solid rgba(0,0,0,.08);border-top-color:#ff5a1f;border-radius:50%;animation:sp .8s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+</style>
+<script>
+(function(){var t="fresh";try{t=localStorage.getItem("mcta_theme")||"fresh";}catch(e){}
+var c={pop:["#f5f6fa","#ff5a1f"],pink:["#fff3f8","#e0508a"],tiki:["#eef9ff","#1a94ff"],green:["#effdf8","#12b886"],clean:["#f7f4ef","#1c1e2b"],fresh:["#f3f9fe","#3b7be8"]}[t]||["#f5f6fa","#ff5a1f"];
+document.documentElement.setAttribute("data-theme",t);window.__splash={bg:c[0],ac:c[1],icon:"icons/app-"+t+"-192.png"};
+document.write('<style>html,body,#splash{background:'+c[0]+'}#splash i{border-top-color:'+c[1]+'}</style>');})();
+</script>
+<link rel="stylesheet" href="style.css?v=28.0">
+<title>MC Thiên Ân</title>
+</head>
+<body>
+<div id="splash"><img alt="" src="icons/app-fresh-192.png" onerror="this.style.display='none'"><i></i><span>Đang mở sổ show…</span></div>
+<script>try{document.querySelector("#splash img").src=window.__splash.icon}catch(e){}</script>
+<div id="app">
+  <header class="topbar">
+    <div>
+      <div class="eyebrow">MC THIÊN ÂN</div>
+      <h1 id="pageTitle">Tổng quan</h1>
+    </div>
+  </header>
+  <main id="content"></main>
+  <nav class="tabbar">
+    <button data-page="home" onclick="navigate('home')"><span class="nav-icon" data-icon="home"></span><span>Tổng quan</span></button>
+    <button data-page="calendar" onclick="navigate('calendar')"><span class="nav-icon" data-icon="calendar"></span><span>Lịch</span></button>
+    <button data-page="jobs" onclick="navigate('jobs')"><span class="nav-icon" data-icon="jobs"></span><span>Jobs</span></button>
+    <button data-page="notes" onclick="navigate('notes')"><span class="nav-icon" data-icon="note"></span><span>Kịch bản</span></button>
+    <button data-page="more" onclick="navigate('more')"><span class="nav-icon" data-icon="more"></span><span>Khác</span></button>
+  </nav>
+</div>
+<div id="modal" class="modal hidden"><div class="modal-card" id="modalCard"></div></div>
+<script src="sync-merge.js?v=28.0"></script>
+<script src="app.js?v=28.0"></script>
+</body>
+</html>
