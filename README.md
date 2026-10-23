@@ -3,7 +3,7 @@
 Sổ lịch show cá nhân của MC Thiên Ân. Từ V28 app chạy trên **GitHub Pages**; dữ liệu và thông báo nằm trên **máy chủ Cloudflare** riêng (thư mục `server/`). Kho này chỉ chứa mã, không chứa dữ liệu show.
 
 - App: https://hoangtourguide0507-create.github.io/mcta-push/
-- Máy chủ: Cloudflare Worker `mcta-push` (Durable Object lưu dữ liệu + hẹn giờ thông báo), mã nguồn ở `server/`.
+- Máy chủ: Cloudflare Worker `mcta-push` (Durable Object lưu dữ liệu + hẹn giờ thông báo), mã nguồn ở `server/` (cấu hình `wrangler.toml` ở thư mục gốc).
 
 ## Mở lần đầu trên một máy
 1. Mở địa chỉ app bằng **Safari** → nút Chia sẻ → **Thêm vào MH chính** → mở app từ biểu tượng mới.

@@ -1,5 +1,5 @@
 name = "mcta-push"
-main = "src/index.js"
+main = "server/src/index.js"
 compatibility_date = "2025-06-01"
 
 [[durable_objects.bindings]]
