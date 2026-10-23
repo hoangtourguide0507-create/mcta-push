@@ -1,5 +1,5 @@
 
-const APP_VERSION="V28.1";
+const APP_VERSION="V28.2";
 // V28.0: app chạy trên GitHub Pages; dữ liệu + thông báo nằm trên máy chủ Cloudflare riêng (mcta-push).
 const CLOUD_DEFAULT="https://mcta-push.hoangtourguide0507.workers.dev";
 const KEY="freelance_planner_v12";
@@ -1063,18 +1063,19 @@ function noteCard(n){const jj=noteJob(n);return `<article class="note-card"><but
 function noteJobOptions(sel){const now=state.jobs.filter(isNotOver).sort(byStart),past=state.jobs.filter(j=>!isNotOver(j)).sort((a,b)=>byStart(b,a)).slice(0,60);const o=j=>`<option value="${j.id}" ${sel===j.id?"selected":""}>${esc(shortDate(j.date))} · ${esc(j.title)}</option>`;const cur=sel&&!now.concat(past).some(j=>j.id===sel)&&state.jobs.find(j=>j.id===sel);return `<option value="">— Không gắn job —</option>${cur?o(cur):""}${now.length?`<optgroup label="Sắp diễn ra">${now.map(o).join("")}</optgroup>`:""}${past.length?`<optgroup label="Đã qua">${past.map(o).join("")}</optgroup>`:""}`;}
 function editorSize(d){const p=readerPrefs();p.edit=Math.max(14,Math.min(34,(p.edit||19)+d));saveReaderPrefs(p);const t=document.getElementById("noteBody");if(t)t.style.fontSize=p.edit+"px";}
 // ---- V23.5: soạn thảo định dạng + hoàn tác (chạy hoàn toàn trên máy) ----
-const RTE_TAGS=new Set(["B","STRONG","I","EM","U","MARK","BR","DIV","P","UL","OL","LI","H3","SPAN","FONT"]);
+const RTE_TAGS=new Set(["B","STRONG","I","EM","U","S","STRIKE","DEL","MARK","BR","HR","DIV","P","UL","OL","LI","H3","SPAN","FONT"]);
 function sanitizeHtml(html){
   const doc=new DOMParser().parseFromString(`<div>${html||""}</div>`,"text/html");const root=doc.body.firstChild;
   (function walk(el){[...el.childNodes].forEach(n=>{
     if(n.nodeType===3)return;
     if(n.nodeType!==1||!RTE_TAGS.has(n.tagName)){if(n.nodeType===1&&!["SCRIPT","STYLE","IFRAME","OBJECT"].includes(n.tagName)){walk(n);n.replaceWith(...n.childNodes);}else n.remove();return;}
-    const keep={};const st=n.getAttribute("style")||"";const col=st.match(/(?:^|;)\s*color:\s*([^;]+)/i),bg=st.match(/background(?:-color)?:\s*([^;]+)/i),fw=st.match(/font-weight:\s*(bold|[6-9]00)/i),fs=st.match(/font-style:\s*italic/i),td=st.match(/text-decoration[^:]*:\s*[^;]*underline/i);
+    const keep={};const st=n.getAttribute("style")||"";const col=st.match(/(?:^|;)\s*color:\s*([^;]+)/i),bg=st.match(/background(?:-color)?:\s*([^;]+)/i),fw=st.match(/font-weight:\s*(bold|[6-9]00)/i),fs=st.match(/font-style:\s*italic/i),td=st.match(/text-decoration[^:]*:\s*[^;]*underline/i),lt=st.match(/text-decoration[^:]*:\s*[^;]*line-through/i),al=st.match(/text-align:\s*(center|right|left)/i);
     const color=(n.tagName==="FONT"&&n.getAttribute("color"))||(col&&col[1]);
     [...n.attributes].forEach(a=>n.removeAttribute(a.name));
     const css=[];const ok=v=>/^(#[0-9a-f]{3,8}|rgba?\([\d\s.,%]+\)|[a-z]+)$/i.test(String(v).trim());
-    if(color&&ok(color))css.push(`color:${color.trim()}`);if(bg&&ok(bg[1]))css.push(`background-color:${bg[1].trim()}`);if(fw)css.push("font-weight:bold");if(fs)css.push("font-style:italic");if(td)css.push("text-decoration:underline");
+    if(color&&ok(color))css.push(`color:${color.trim()}`);if(bg&&ok(bg[1]))css.push(`background-color:${bg[1].trim()}`);if(fw)css.push("font-weight:bold");if(fs)css.push("font-style:italic");if(td||lt)css.push(`text-decoration:${[td&&"underline",lt&&"line-through"].filter(Boolean).join(" ")}`);
     if(css.length&&["SPAN","FONT","MARK"].includes(n.tagName))n.setAttribute("style",css.join(";"));
+    if(al&&["DIV","P","H3","LI"].includes(n.tagName))n.setAttribute("style",`text-align:${al[1].toLowerCase()}`);
     walk(n);
   });})(root);
   return root.innerHTML;
@@ -1100,22 +1101,66 @@ function rteClear(){rteCmd("removeFormat");rteCmd("formatBlock","DIV");}
 function rtePaste(e){e.preventDefault();const t=(e.clipboardData||window.clipboardData).getData("text/plain");rteCmd("insertText",t);}
 document.addEventListener("keydown",e=>{if(!rteEl()||!document.activeElement||document.activeElement!==rteEl())return;const k=e.key.toLowerCase();if((e.metaKey||e.ctrlKey)&&k==="z"){e.preventDefault();e.shiftKey?rteRedo():rteUndo();}else if((e.metaKey||e.ctrlKey)&&k==="y"){e.preventDefault();rteRedo();}});
 function openNote(existing=null,opts={}){
-  const n=existing||{id:"",title:"",body:"",jobId:opts.jobId||"",kind:opts.kind||"script"};const p=readerPrefs();noteDirty=false;
-  openModal(`<form class="note-editor" onsubmit="saveNote(event,'${n.id}')" oninput="noteDirty=true" onchange="noteDirty=true">
-   <div class="ne-head"><button type="button" class="close" onclick="closeNoteEditor()">×</button><div class="ne-title-wrap"><div class="eyebrow">${n.id?"SỬA KỊCH BẢN":"KỊCH BẢN MỚI"}</div></div><div class="ne-size" onpointerdown="if(event.target.closest('button'))event.preventDefault()"><button type="button" class="rd-btn ne-undo" id="tbUndo" onclick="rteUndo()" title="Hoàn tác">↶</button><button type="button" class="rd-btn ne-undo" id="tbRedo" onclick="rteRedo()" title="Làm lại">↷</button><i class="tb-sep"></i><button type="button" class="rd-btn" onclick="editorSize(-1)">A−</button><button type="button" class="rd-btn" onclick="editorSize(1)">A+</button></div></div>
-   <input class="ne-title" name="title" value="${esc(n.title)}" placeholder="Tiêu đề (vd: Kịch bản lễ cưới Minh & Lan)" required>
-   <div class="ne-meta"><label class="ne-job"><span>${icon("jobs",14)} Job</span><select name="jobId">${noteJobOptions(n.jobId)}</select></label><label class="ne-kind"><select name="kind"><option value="script" ${noteKind(n)==="script"?"selected":""}>Kịch bản</option><option value="lovestory" ${noteKind(n)==="lovestory"?"selected":""}>Love Story</option></select></label></div>
-   <div class="ne-toolbar" onpointerdown="if(event.target.closest('button'))event.preventDefault()">
-    <button type="button" class="tb" onclick="rteCmd('bold')" title="In đậm"><b>B</b></button><button type="button" class="tb" onclick="rteCmd('italic')" title="In nghiêng"><i>I</i></button><button type="button" class="tb" onclick="rteCmd('underline')" title="Gạch chân"><u>U</u></button><button type="button" class="tb" onclick="rteUpper()" title="IN HOA chữ đang chọn">AA</button><i class="tb-sep"></i>
-    <button type="button" class="tb" onclick="rteCmd('formatBlock','H3')" title="Tiêu đề đoạn">H</button><button type="button" class="tb" onclick="rteMark('#fff3a3')" title="Tô vàng"><span class="tb-hl">A</span></button><button type="button" class="tb" onclick="rteColor('#e5304f')" title="Chữ đỏ (cue)"><span style="color:#e5304f;font-weight:900">A</span></button><button type="button" class="tb" onclick="rteCmd('insertUnorderedList')" title="Gạch đầu dòng">•≡</button><button type="button" class="tb" onclick="rteCue()" title="Chèn cue">[cue]</button><i class="tb-sep"></i>
-    <button type="button" class="tb" onclick="rteClear()" title="Xoá định dạng">Tx</button>
+  let n=existing||{id:"",title:"",body:"",jobId:opts.jobId||"",kind:opts.kind||"script"};const p=readerPrefs();noteDirty=false;
+  // Còn bản nháp chưa lưu (app bị đóng / tải lại giữa chừng) → hỏi khôi phục
+  const dr=noteDraftGet(n.id);let restored=false;
+  if(dr&&dr.html!==noteHtml(n)&&(!n.updatedAt||dr.at>Date.parse(n.updatedAt))&&confirm(`Có bản nháp chưa lưu (${relTime(dr.at)}) của kịch bản này. Mở bản nháp?`)){n={...n,title:dr.title||n.title,html:dr.html,jobId:dr.jobId??n.jobId,kind:dr.kind||n.kind};restored=true;}else if(dr)noteDraftClear(n.id);
+  const tb=(cmd,label,title,cls="")=>`<button type="button" class="tb ${cls}" data-cmd="${cmd}" onclick="${cmd}" title="${title}" aria-label="${title}">${label}</button>`;
+  openModal(`<form class="note-editor" data-id="${esc(n.id)}" onsubmit="saveNote(event,'${n.id}')" oninput="noteDirty=true;noteDraftSoon()" onchange="noteDirty=true;noteDraftSoon()">
+   <div class="ne-head"><button type="button" class="close" onclick="closeNoteEditor()" aria-label="Đóng">×</button><div class="ne-title-wrap"><div class="eyebrow">${n.id?"SỬA KỊCH BẢN":"KỊCH BẢN MỚI"}</div><div class="ne-mini-title">${esc(n.title||"Kịch bản mới")}</div></div><div class="ne-size" onpointerdown="if(event.target.closest('button'))event.preventDefault()"><button type="button" class="rd-btn ne-undo" id="tbUndo" onclick="rteUndo()" title="Hoàn tác" aria-label="Hoàn tác">↶</button><button type="button" class="rd-btn ne-undo" id="tbRedo" onclick="rteRedo()" title="Làm lại" aria-label="Làm lại">↷</button></div><button type="button" class="ne-done" onclick="rteDone()">Xong</button><button class="ne-save">Lưu</button></div>
+   <div class="ne-meta-wrap">
+    <input class="ne-title" name="title" value="${esc(n.title)}" placeholder="Tiêu đề (vd: Kịch bản lễ cưới Minh & Lan)" oninput="const t=document.querySelector('.ne-mini-title');if(t)t.textContent=this.value||'Kịch bản mới'">
+    <div class="ne-meta"><label class="ne-job"><span>${icon("jobs",14)} Job</span><select name="jobId">${noteJobOptions(n.jobId)}</select></label><label class="ne-kind"><select name="kind"><option value="script" ${noteKind(n)==="script"?"selected":""}>Kịch bản</option><option value="lovestory" ${noteKind(n)==="lovestory"?"selected":""}>Love Story</option></select></label></div>
    </div>
-   <div id="noteBody" class="ne-body rte" contenteditable="true" data-ph="Nội dung kịch bản, câu dẫn, cue…" style="font-size:${p.edit||19}px" onpaste="rtePaste(event)" oninput="rteRecord()">${noteHtml(n)}</div>
+   <div id="noteBody" class="ne-body rte" contenteditable="true" data-ph="Nội dung kịch bản, câu dẫn, cue…" style="font-size:${p.edit||19}px" onpaste="rtePaste(event)" oninput="rteRecord()" onfocus="rteTyping(true)" onblur="rteTyping(false)">${noteHtml(n)}</div>
+   <div class="ne-dock" onpointerdown="if(event.target.closest('button'))event.preventDefault()">
+    <div class="ne-palette" id="nePalette" hidden></div>
+    <div class="ne-toolbar" id="neToolbar">
+     ${tb("rteCmd('bold')","<b>B</b>","In đậm")}${tb("rteCmd('italic')","<i>I</i>","In nghiêng")}${tb("rteCmd('underline')","<u>U</u>","Gạch chân")}${tb("rteCmd('strikeThrough')","<s>S</s>","Gạch ngang")}<i class="tb-sep"></i>
+     ${tb("rtePalette('fore')",'<span class="tb-color">A</span>',"Màu chữ")}${tb("rtePalette('hili')",'<span class="tb-hl">A</span>',"Tô nền")}${tb("rteEN()",'<span class="tb-en">EN</span>',"Dòng tiếng Anh (nghiêng, xanh)")}${tb("rteCue()","[cue]","Chèn cue")}<i class="tb-sep"></i>
+     ${tb("rteBlock('H3')","H","Tiêu đề đoạn")}${tb("rteCmd('insertUnorderedList')","•≡","Gạch đầu dòng")}${tb("rteCmd('insertOrderedList')","1.≡","Danh sách số")}${tb("rteAlign()",'<span class="tb-al">≡</span>',"Căn giữa / căn trái")}${tb("rteHr()","—","Đường kẻ ngăn đoạn")}<i class="tb-sep"></i>
+     ${tb("rteUpper()","AA","IN HOA chữ đang chọn")}${tb("rteClear()","Tx","Xoá định dạng")}${tb("editorSize(-1)","A−","Chữ nhỏ lại")}${tb("editorSize(1)","A+","Chữ to lên")}
+    </div>
+    <div class="ne-stat" id="neStat"></div>
+   </div>
    <div class="ne-actions">${n.id?`<button type="button" class="outline-btn danger-text" onclick="deleteNote('${n.id}',true)">Xoá</button><button type="button" class="outline-btn" onclick="saveNoteThenRead('${n.id}')">Đọc</button><button type="button" class="outline-btn" onclick="saveNoteThenExport('${n.id}')">Word</button>`:""}<button class="black-btn submit">Lưu kịch bản</button></div>
   </form>`);
   document.getElementById("modal").classList.add("editor-mode");
-  rteInit();fitEditor();
+  rteInit();fitEditor();rteStat();if(restored){noteDirty=true;showToast("Đã mở bản nháp chưa lưu");}
 }
+// ---- V28.2: thanh công cụ soạn kịch bản đầy đủ hơn ----
+const RTE_FORE=[["#e5304f","Đỏ"],["#2563eb","Xanh dương"],["#059669","Xanh lá"],["#ea580c","Cam"],["#7c3aed","Tím"],["#111827","Đen"]];
+const RTE_HILI=[["#fff3a3","Vàng"],["#c8f7dc","Xanh lá"],["#ffd6e7","Hồng"],["#d6e9ff","Xanh"],["transparent","Bỏ tô"]];
+function rtePalette(kind){const pal=document.getElementById("nePalette");if(!pal)return;
+  if(!pal.hidden&&pal.dataset.kind===kind){pal.hidden=true;return;}
+  const list=kind==="fore"?RTE_FORE:RTE_HILI;pal.dataset.kind=kind;
+  pal.innerHTML=`<span>${kind==="fore"?"Màu chữ":"Tô nền"}</span>`+list.map(([c,t])=>`<button type="button" class="sw ${c==="transparent"?"none":""}" style="--c:${c}" title="${t}" aria-label="${t}" onclick="rteApplyColor('${kind}','${c}')"></button>`).join("");pal.hidden=false;}
+function rteApplyColor(kind,c){const pal=document.getElementById("nePalette");if(pal)pal.hidden=true;
+  if(kind==="fore")rteCmd("foreColor",c);else if(c==="transparent"){rteCmd("hiliteColor","transparent");}else rteCmd("hiliteColor",c);}
+function rteEN(){const sel=getSelection();if(!rteSelInside()||sel.isCollapsed){showToast("Bôi đen câu tiếng Anh trước");return;}rteCmd("italic");rteCmd("foreColor","#2563eb");}
+function rteBlock(tag){const cur=(document.queryCommandValue("formatBlock")||"").toLowerCase();rteCmd("formatBlock",cur===tag.toLowerCase()?"DIV":tag);}
+function rteAlign(){rteCmd(document.queryCommandState("justifyCenter")?"justifyLeft":"justifyCenter");}
+function rteHr(){if(!rteSelInside())rteEl().focus();rteCmd("insertHTML","<hr><div><br></div>");}
+function rteDone(){const pal=document.getElementById("nePalette");if(pal)pal.hidden=true;try{document.activeElement&&document.activeElement.blur();}catch(_){}rteTyping(false);}
+// Đang gõ (bàn phím bật): ẩn tiêu đề/job/nút dưới cùng để vùng soạn rộng nhất, thanh công cụ nằm sát bàn phím
+let rteTypingTimer=null;
+function rteTyping(on){const f=document.querySelector("#modalCard form.note-editor");if(!f)return;clearTimeout(rteTypingTimer);
+  if(on){f.classList.add("typing");setTimeout(fitEditor,50);}
+  else rteTypingTimer=setTimeout(()=>{if(document.activeElement===rteEl())return;f.classList.remove("typing");const pal=document.getElementById("nePalette");if(pal)pal.hidden=true;fitEditor();},180);}
+// Đếm chữ + thời gian đọc ước tính (khoảng 150 tiếng/phút)
+let rteStatTimer=null;
+function rteStat(){const e=rteEl(),st=document.getElementById("neStat");if(!e||!st)return;const w=(e.innerText||"").trim().split(/\s+/).filter(Boolean).length;
+  const m=w/150;st.textContent=w?`${w.toLocaleString("vi-VN")} chữ · đọc khoảng ${m<1?"dưới 1":Math.round(m)} phút`:"";}
+// Nháp tự lưu trên máy mỗi lần gõ — mất mạng hay app bị đóng giữa chừng cũng không mất chữ
+const NOTE_DRAFT="mcta_note_draft";
+function noteDraftAll(){try{return JSON.parse(localStorage.getItem(NOTE_DRAFT)||"{}")||{};}catch(_){return {};}}
+function noteDraftGet(id){return noteDraftAll()[id||"_new"]||null;}
+function noteDraftClear(id){const a=noteDraftAll();delete a[id||"_new"];try{localStorage.setItem(NOTE_DRAFT,JSON.stringify(a));}catch(_){}}
+let noteDraftTimer=null;
+function noteDraftSoon(){clearTimeout(noteDraftTimer);noteDraftTimer=setTimeout(noteDraftSave,800);clearTimeout(rteStatTimer);rteStatTimer=setTimeout(rteStat,300);}
+function noteDraftSave(){const f=document.querySelector("#modalCard form.note-editor"),e=rteEl();if(!f||!e||!noteDirty)return;const id=f.dataset.id||"_new";const a=noteDraftAll();
+  a[id]={title:f.elements.title.value,jobId:f.elements.jobId.value,kind:f.elements.kind.value,html:sanitizeHtml(e.innerHTML),at:Date.now()};
+  Object.keys(a).forEach(k=>{if(Date.now()-a[k].at>14*86400000)delete a[k];});try{localStorage.setItem(NOTE_DRAFT,JSON.stringify(a));}catch(_){}}
 // iPhone/iPad: khi bàn phím bật, Safari đẩy trang lên nhưng màn soạn vẫn cao bằng cả màn hình → phần đang gõ bị che,
 // chạm bị lệch, có lúc không gõ/không bấm được. Giữ màn soạn vừa đúng phần nhìn thấy phía trên bàn phím.
 function fitEditor(){const m=document.getElementById("modal"),vv=window.visualViewport;if(!m||!vv)return;
@@ -1124,7 +1169,7 @@ function fitEditor(){const m=document.getElementById("modal"),vv=window.visualVi
 if(window.visualViewport){visualViewport.addEventListener("resize",fitEditor);visualViewport.addEventListener("scroll",fitEditor);}
 // Bàn phím đóng mà trang còn bị đẩy lệch → kéo về đúng chỗ để các nút bấm lại được.
 document.addEventListener("focusout",()=>{if(!document.documentElement.classList.contains("modal-open"))return;setTimeout(()=>{const a=document.activeElement;if(a&&(a.isContentEditable||/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)))return;if(window.scrollY)window.scrollTo(0,0);fitEditor();},120);});
-function closeNoteEditor(){if(noteDirty&&!confirm("Đóng mà không lưu thay đổi?"))return;noteDirty=false;const jid=document.querySelector("#modalCard select[name=jobId]")?.value;closeModal();if(openJobAfterNote&&jid){openJobAfterNote=false;openJob(jid);}openJobAfterNote=false;}
+function closeNoteEditor(){if(noteDirty&&!confirm("Đóng mà không lưu thay đổi?"))return;clearTimeout(noteDraftTimer);noteDraftClear(document.querySelector("#modalCard form.note-editor")?.dataset.id);noteDirty=false;const jid=document.querySelector("#modalCard select[name=jobId]")?.value;closeModal();if(openJobAfterNote&&jid){openJobAfterNote=false;openJob(jid);}openJobAfterNote=false;}
 function saveNoteThenRead(id){const f=document.querySelector("#modalCard form.note-editor");if(noteDirty){f.requestSubmit();setTimeout(()=>openReader(id),150);}else{closeModal();openReader(id);}}
 function deleteNote(id,fromModal){const n=state.notes.find(x=>x.id===id);if(!n)return;if(!confirm(`Xoá note “${n.title||"(Không tiêu đề)"}”? Máy trợ lý cũng sẽ xoá theo.`))return;state.notes=state.notes.filter(x=>x.id!==id);save();if(fromModal)closeModal();render();showToast("Đã xoá note");}
 // ---- V23.3: Chế độ đọc toàn màn hình (chạy hoàn toàn trên máy, không dùng mạng) ----
@@ -1177,19 +1222,25 @@ function htmlToParas(html){
     if(["B","STRONG"].includes(tag)||/font-weight:\s*(bold|[6-9]00)/i.test(css))g.b=1;
     if(["I","EM"].includes(tag)||/font-style:\s*italic/i.test(css))g.i=1;
     if(tag==="U"||/text-decoration[^;]*underline/i.test(css))g.u=1;
+    if(["S","STRIKE","DEL"].includes(tag)||/text-decoration[^;]*line-through/i.test(css))g.s=1;
+    if(tag==="HR"){close();paras.push({st:"hr",runs:[]});return;}
+    const al=(css.match(/text-align:\s*(center|right)/i)||[])[1];
     const col=(tag==="FONT"&&n.getAttribute("color"))||(css.match(/(?:^|;)\s*color:\s*([^;]+)/i)||[])[1];if(cssHex(col))g.c=cssHex(col);
     const bg=(css.match(/background(?:-color)?:\s*([^;]+)/i)||[])[1];if(cssHex(bg))g.h=cssHex(bg);if(tag==="MARK"&&!g.h)g.h="FFF3A3";
-    if(tag==="UL"||tag==="OL"){close();walk(n,g,"li");close();return;}
-    if(["DIV","P","H3","LI"].includes(tag)){close();walk(n,g,tag==="H3"?"h":tag==="LI"?"li":st);close();return;}
+    if(tag==="OL"){close();let k=0;n.childNodes.forEach(li=>{if(li.nodeType!==1)return;close();const c=open("li");c.num=++k;const la=((li.getAttribute("style")||"").match(/text-align:\s*(center|right)/i)||[])[1];if(la)c.al=la.toLowerCase();walk(li,g,"li");close();});return;}
+    if(tag==="UL"){close();walk(n,g,"li");close();return;}
+    if(["DIV","P","H3","LI"].includes(tag)){close();if(al)open(tag==="H3"?"h":tag==="LI"?"li":st).al=al.toLowerCase();walk(n,g,tag==="H3"?"h":tag==="LI"?"li":st);close();return;}
     walk(n,g,st);
   });})(root,{},"p");close();
-  while(paras.length&&!paras[paras.length-1].runs.length)paras.pop();
+  while(paras.length&&!paras[paras.length-1].runs.length&&paras[paras.length-1].st!=="hr")paras.pop();
   return paras;
 }
-function runXml(r,extra=""){const p=[extra];if(r.b)p.push("<w:b/>");if(r.i)p.push("<w:i/>");if(r.u)p.push('<w:u w:val="single"/>');if(r.c)p.push(`<w:color w:val="${r.c}"/>`);if(r.h)p.push(`<w:shd w:val="clear" w:color="auto" w:fill="${r.h}"/>`);return `<w:r><w:rPr>${p.join("")}</w:rPr><w:t xml:space="preserve">${xmlEsc(r.t)}</w:t></w:r>`;}
-function paraXml(pa){if(pa.st==="h")return `<w:p><w:pPr><w:spacing w:before="240" w:after="80"/><w:keepNext/></w:pPr>${pa.runs.map(r=>runXml({...r,b:1},'<w:sz w:val="30"/>')).join("")}</w:p>`;
-  if(pa.st==="li")return `<w:p><w:pPr><w:ind w:left="567" w:hanging="283"/></w:pPr>${runXml({t:"•\t"})}${pa.runs.map(r=>runXml(r)).join("")}</w:p>`;
-  return `<w:p>${pa.runs.map(r=>runXml(r)).join("")}</w:p>`;}
+function runXml(r,extra=""){const p=[extra];if(r.b)p.push("<w:b/>");if(r.i)p.push("<w:i/>");if(r.u)p.push('<w:u w:val="single"/>');if(r.s)p.push("<w:strike/>");if(r.c)p.push(`<w:color w:val="${r.c}"/>`);if(r.h)p.push(`<w:shd w:val="clear" w:color="auto" w:fill="${r.h}"/>`);return `<w:r><w:rPr>${p.join("")}</w:rPr><w:t xml:space="preserve">${xmlEsc(r.t)}</w:t></w:r>`;}
+function paraXml(pa){const jc=pa.al?`<w:jc w:val="${pa.al}"/>`:"";
+  if(pa.st==="hr")return '<w:p><w:pPr><w:pBdr><w:bottom w:val="single" w:sz="8" w:space="1" w:color="9CA3AF"/></w:pBdr></w:pPr></w:p>';
+  if(pa.st==="h")return `<w:p><w:pPr><w:spacing w:before="240" w:after="80"/><w:keepNext/>${jc}</w:pPr>${pa.runs.map(r=>runXml({...r,b:1},'<w:sz w:val="30"/>')).join("")}</w:p>`;
+  if(pa.st==="li")return `<w:p><w:pPr><w:ind w:left="567" w:hanging="340"/>${jc}</w:pPr>${runXml({t:(pa.num?pa.num+".":"•")+"\t"})}${pa.runs.map(r=>runXml(r)).join("")}</w:p>`;
+  return `<w:p>${jc?`<w:pPr>${jc}</w:pPr>`:""}${pa.runs.map(r=>runXml(r)).join("")}</w:p>`;}
 function buildDocx(n){
   const j=noteJob(n);const head=[`<w:p><w:pPr><w:spacing w:after="60"/></w:pPr>${runXml({t:n.title||"Kịch bản",b:1},'<w:sz w:val="40"/>')}</w:p>`];
   if(j)head.push(`<w:p><w:pPr><w:spacing w:after="240"/></w:pPr>${runXml({t:[j.title,fmtLong(j.date)+(j.time?` • ${j.time}`:""),j.locationName||j.location].filter(Boolean).join("  ·  "),c:"6B7280"},'<w:sz w:val="22"/>')}</w:p>`);
@@ -1212,7 +1263,7 @@ async function exportNoteDocx(id){
   const a=document.createElement("a");a.href=URL.createObjectURL(file);a.download=file.name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},1500);showToast("Đã xuất file Word ✓");
 }
 function saveNoteThenExport(id){const f=document.querySelector("#modalCard form.note-editor");if(noteDirty&&f){f.requestSubmit();setTimeout(()=>exportNoteDocx(id),200);}else exportNoteDocx(id);}
-function saveNote(e,id){e.preventDefault();const d=Object.fromEntries(new FormData(e.target).entries());const ed=document.getElementById("noteBody");if(ed){d.html=sanitizeHtml(ed.innerHTML);d.body=htmlToText(d.html);}const now=new Date().toISOString();d.updatedAt=now;if(id)Object.assign(state.notes.find(n=>n.id===id),d);else state.notes.push({...d,id:makeId(),createdAt:now});noteDirty=false;save();closeModal();render();if(page==="notes"||!id)showToast("Đã lưu kịch bản ✓");const jid=d.jobId;const m=document.getElementById("modal");if(openJobAfterNote&&jid){openJobAfterNote=false;openJob(jid);}}
+function saveNote(e,id){e.preventDefault();clearTimeout(noteDraftTimer);noteDraftClear(id);const d=Object.fromEntries(new FormData(e.target).entries());d.title=String(d.title||"").trim()||"Kịch bản không tên";const ed=document.getElementById("noteBody");if(ed){d.html=sanitizeHtml(ed.innerHTML);d.body=htmlToText(d.html);}const now=new Date().toISOString();d.updatedAt=now;if(id)Object.assign(state.notes.find(n=>n.id===id),d);else state.notes.push({...d,id:makeId(),createdAt:now});noteDirty=false;save();closeModal();render();if(page==="notes"||!id)showToast("Đã lưu kịch bản ✓");const jid=d.jobId;const m=document.getElementById("modal");if(openJobAfterNote&&jid){openJobAfterNote=false;openJob(jid);}}
 var openJobAfterNote=false;
 function openModal(html){const c=document.getElementById("modalCard");c.innerHTML=html;c.scrollTop=0;c.scrollLeft=0;document.getElementById("modal").classList.remove("hidden");document.documentElement.classList.add("modal-open")}
 function closeModal(){const md=document.getElementById("modal");md.style.top="";md.style.height="";md.classList.add("hidden");document.getElementById("modal").classList.remove("editor-mode");document.documentElement.classList.remove("modal-open");if(pendingRender){pendingRender=false;setTimeout(render,0);}}

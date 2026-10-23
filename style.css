@@ -905,3 +905,38 @@ button{color:inherit}
 #mcPtr.spin i{animation:mc-spin .7s linear infinite}
 @keyframes mc-spin{to{transform:rotate(360deg)}}
 @media (prefers-reduced-motion: reduce){:root[data-motion] *{animation:none!important;transition:none!important}}
+
+/* ===== V28.2 · Màn soạn kịch bản: vùng gõ rộng, thanh công cụ lớn sát bàn phím ===== */
+.note-editor{gap:8px}
+.ne-head{gap:8px}
+.ne-title-wrap{min-width:0}
+.ne-mini-title{display:none;font-weight:850;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ne-save,.ne-done{flex:0 0 auto;border:0;border-radius:12px;height:40px;padding:0 14px;font:inherit;font-size:14px;font-weight:850}
+.ne-save{background:var(--purple);color:#fff}
+.ne-done{display:none;background:var(--soft);color:var(--ink)}
+.ne-meta-wrap{display:flex;flex-direction:column;gap:8px}
+.ne-dock{flex:0 0 auto;display:flex;flex-direction:column;gap:6px}
+.ne-toolbar{gap:6px;padding:6px;border-radius:16px}
+.tb{min-width:46px;height:44px;border-radius:12px;font-size:17px;padding:0 10px}
+.tb-sep{height:26px}
+.tb-color{color:#e5304f;font-weight:900;border-bottom:3px solid #e5304f;line-height:1.1}
+.tb-en{color:#2563eb;font-style:italic;font-weight:900;font-size:14px}
+.tb-al{font-weight:900;letter-spacing:-1px}
+.ne-palette{display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid var(--line);border-radius:16px;background:var(--paper,#fff);box-shadow:0 8px 22px rgba(0,0,0,.1);overflow-x:auto}
+.ne-palette[hidden]{display:none}
+.ne-palette span{font-size:12px;font-weight:800;color:var(--muted);white-space:nowrap}
+.ne-palette .sw{flex:0 0 auto;width:38px;height:38px;border-radius:50%;border:2px solid #fff;background:var(--c);box-shadow:0 0 0 1px var(--line)}
+.ne-palette .sw.none{background:linear-gradient(135deg,#fff 45%,#e5304f 46%,#e5304f 54%,#fff 55%)}
+.ne-stat{font-size:11.5px;color:var(--muted);text-align:right;min-height:14px;padding:0 4px}
+.ne-stat:empty{display:none}
+.rte s,.rte strike,.rte del,.rte-view s,.rte-view strike,.rte-view del{text-decoration:line-through}
+.rte hr,.rte-view hr{border:0;border-top:2px dashed var(--line,#ddd);margin:14px 0}
+.rte ol,.rte-view ol{padding-left:1.6em;margin:.3em 0}
+/* đang gõ: ẩn tiêu đề, job, nút dưới — chỉ còn vùng soạn + thanh công cụ */
+.note-editor.typing .ne-meta-wrap,.note-editor.typing .ne-actions{display:none}
+.note-editor.typing .ne-head .eyebrow{display:none}
+.note-editor.typing .ne-mini-title{display:block}
+.note-editor.typing .ne-done{display:block}
+.note-editor.typing{padding-bottom:8px}
+.note-editor.typing .ne-body{border-radius:14px}
+@media(max-width:380px){.ne-head .ne-title-wrap{display:block}.note-editor:not(.typing) .ne-head .ne-title-wrap{display:none}.ne-size .ne-undo{min-width:40px}}
