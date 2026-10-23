@@ -848,3 +848,60 @@ button{color:inherit}
 /* V28.0 kết nối máy chủ */
 .setup-form small{font-size:11px;color:var(--muted);line-height:1.45}.setup-form .field>span em{text-transform:none;letter-spacing:0;font-style:normal;font-weight:650}#setupMsg{color:#b0554e;min-height:16px}.setup-form .black-btn{width:100%;padding:14px}
 .form-map iframe{height:180px}#formMapPreview:empty{display:none}#formMapPreview{margin-top:2px}
+
+/* ===== V28.1 · Hiệu ứng chuyển động (ý tưởng từ app Giáo Án Địa Ngục) ===== */
+:root{--mc-ease:cubic-bezier(.2,.8,.2,1);--mc-spring:cubic-bezier(.3,1.5,.5,1)}
+/* chuyển trang: nội dung trượt lên, các thẻ hiện lần lượt */
+:root[data-motion="on"] #content.enter{animation:mc-view .34s var(--mc-ease)}
+:root[data-motion="on"] #content.enter :is(.hero,.metric-card,.timeline-item,.job-row,.pay-row,.pay-sum-card,.setting-card,.meeting-item,.work-alert,.rep-row,.notify-nudge,.backup-nudge,.calendar-card,.nt-step,.nt-dev,.empty){animation:mc-rise .46s var(--mc-ease) both;animation-delay:calc(var(--k,0) * 42ms + 50ms)}
+:root[data-motion="on"] #content.enter .cal-day{animation:mc-pop-in .36s var(--mc-spring) both;animation-delay:calc(var(--k,0) * 9ms + 80ms)}
+:root[data-motion="on"] #content.enter .rep-col :is(i,b){transform-origin:bottom;animation:mc-growy .7s var(--mc-ease) both;animation-delay:calc(var(--k,0) * 45ms + 150ms)}
+:root[data-motion="on"] #content.enter .pay-bar i{transform-origin:left;animation:mc-growx .8s var(--mc-ease) both;animation-delay:calc(var(--k,0) * 40ms + 200ms)}
+@keyframes mc-view{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+@keyframes mc-rise{from{opacity:0;transform:translateY(16px) scale(.985)}to{opacity:1;transform:none}}
+@keyframes mc-pop-in{from{opacity:0;transform:scale(.7)}to{opacity:1;transform:none}}
+@keyframes mc-growy{from{transform:scaleY(0)}}
+@keyframes mc-growx{from{transform:scaleX(0)}}
+/* thanh tab: biểu tượng nảy khi chọn */
+:root[data-motion="on"] .tabbar button.pop .nav-icon{animation:mc-navpop .5s var(--mc-spring)}
+@keyframes mc-navpop{0%{transform:scale(.6) translateY(4px)}55%{transform:scale(1.22) translateY(-3px)}100%{transform:none}}
+:root[data-motion="on"] .tabbar button.active::after{animation:mc-growx .35s var(--mc-ease)}
+/* bấm vào thẻ / nút: lún nhẹ */
+:root[data-motion="on"] :is(.timeline-item,.job-row,.metric-card,.pay-main,.setting-card,.hero,.black-btn,.outline-btn,.small-black,.filter,.cal-day,.seg-switch button,.travel-btn,.contact-btn,.notify-nudge,.backup-nudge,.tabbar button,.mini-btn,.text-btn){transition:transform .16s var(--mc-ease),box-shadow .2s,background-color .2s}
+:root[data-motion="on"] :is(.timeline-item,.job-row,.metric-card,.pay-main,.setting-card,.hero,.notify-nudge,.backup-nudge):active{transform:scale(.975)}
+:root[data-motion="on"] :is(.black-btn,.outline-btn,.small-black,.filter,.cal-day,.seg-switch button,.travel-btn,.contact-btn,.tabbar button,.mini-btn):active{transform:scale(.94);transition-duration:.08s}
+/* nút vừa bấm (lọc, chọn ngày…) nảy nhẹ */
+:root[data-motion="on"] .tap-pop{animation:mc-tap .42s var(--mc-spring)}
+@keyframes mc-tap{0%{transform:scale(.86)}60%{transform:scale(1.06)}100%{transform:none}}
+/* bảng trượt lên có độ nảy, nền mờ dần */
+:root[data-motion="on"] .modal:not(.hidden){animation:mc-fade .22s ease-out}
+:root[data-motion="on"] .modal:not(.hidden):not(.editor-mode) .modal-card{animation:mc-sheet .46s cubic-bezier(.2,1.1,.3,1)}
+:root[data-motion="on"] .modal.editor-mode:not(.hidden) .modal-card{animation:mc-view .3s var(--mc-ease)}
+:root[data-motion="on"] .reader:not([hidden]){animation:mc-fade .25s ease-out}
+@keyframes mc-fade{from{opacity:0}}
+@keyframes mc-sheet{from{transform:translateY(80px);opacity:.3}to{transform:none;opacity:1}}
+/* thông báo nhỏ nảy lên */
+:root[data-motion="on"] .toast.show{animation:mc-toast .42s var(--mc-spring)}
+@keyframes mc-toast{from{opacity:0;transform:translate(-50%,26px) scale(.9)}to{opacity:1;transform:translate(-50%,0)}}
+/* thẻ show tiếp theo: vệt sáng lướt qua */
+.mc-shine{display:none}
+:root[data-motion="on"] .hero .mc-shine{display:block;position:absolute;inset:0;pointer-events:none;border-radius:inherit;background:linear-gradient(105deg,transparent 35%,rgba(255,255,255,.28) 50%,transparent 65%);background-size:250% 100%;background-position:100% 0;animation:mc-shine 6s ease-in-out 1s infinite;z-index:1}
+@keyframes mc-shine{0%,62%{background-position:100% 0}88%,100%{background-position:-60% 0}}
+/* chuông nhắc bật thông báo lắc nhẹ */
+:root[data-motion="on"] .notify-nudge>span{display:inline-block;animation:mc-ring 1.2s ease-in-out .6s 2}
+@keyframes mc-ring{0%,100%{transform:rotate(0)}15%{transform:rotate(-16deg)}30%{transform:rotate(13deg)}45%{transform:rotate(-9deg)}60%{transform:rotate(5deg)}}
+/* đóng dấu ĐÃ THU ĐỦ */
+.mc-stamp{position:fixed;inset:0;z-index:300;display:flex;align-items:center;justify-content:center;pointer-events:none}
+.mc-stamp span{font-weight:950;font-size:34px;letter-spacing:.06em;color:#0fa36b;border:5px solid currentColor;border-radius:16px;padding:10px 20px;background:rgba(255,255,255,.92);box-shadow:0 18px 40px rgba(15,163,107,.25);transform:rotate(-8deg);animation:mc-stamp .55s cubic-bezier(.2,1.4,.4,1) both}
+.mc-stamp i{position:absolute;left:50%;top:50%;width:9px;height:9px;border-radius:3px;background:hsl(var(--h) 85% 58%);transform:rotate(var(--a)) translateY(0);opacity:0;animation:mc-burst .9s var(--mc-ease) .22s both}
+.mc-stamp.out{transition:opacity .4s;opacity:0}
+@keyframes mc-stamp{0%{transform:scale(2.6) rotate(-18deg);opacity:0}60%{transform:scale(.92) rotate(-7deg);opacity:1}100%{transform:scale(1) rotate(-8deg);opacity:1}}
+@keyframes mc-burst{0%{opacity:1;transform:rotate(var(--a)) translateY(0) scale(1)}100%{opacity:0;transform:rotate(var(--a)) translateY(calc(var(--d) * -1)) scale(.6)}}
+/* kéo xuống để làm mới */
+#mcPtr{position:fixed;left:50%;top:calc(env(safe-area-inset-top,0px) + 14px);z-index:60;width:34px;height:34px;margin-left:-17px;border-radius:50%;opacity:0;pointer-events:none;background:var(--paper,#fff);box-shadow:0 6px 18px rgba(0,0,0,.18);display:flex;align-items:center;justify-content:center;transition:opacity .2s}
+#mcPtr i{width:16px;height:16px;border-radius:50%;border:2.4px solid var(--purple,#ff5a1f);border-right-color:transparent;display:block}
+#mcPtr.ready i{border-color:#0fa36b;border-right-color:transparent}
+#mcPtr.spin{opacity:1!important;transform:translateY(30px)!important}
+#mcPtr.spin i{animation:mc-spin .7s linear infinite}
+@keyframes mc-spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion: reduce){:root[data-motion] *{animation:none!important;transition:none!important}}

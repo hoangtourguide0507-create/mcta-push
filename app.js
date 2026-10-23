@@ -1,5 +1,5 @@
 
-const APP_VERSION="V28.0";
+const APP_VERSION="V28.1";
 // V28.0: app chạy trên GitHub Pages; dữ liệu + thông báo nằm trên máy chủ Cloudflare riêng (mcta-push).
 const CLOUD_DEFAULT="https://mcta-push.hoangtourguide0507.workers.dev";
 const KEY="freelance_planner_v12";
@@ -126,7 +126,7 @@ function collectMeetings(d){
 
 function hideSplash(){try{localStorage.setItem("mcta_theme",state.settings.theme||"fresh");}catch(_){}const sp=document.getElementById("splash");if(sp){sp.classList.add("gone");setTimeout(()=>sp.remove(),350);}}
 // ---- V23.1: đồng bộ theo từng mục + ghi nhận xoá ----
-const DEVICE_SETTINGS=["financeVisible","soundNotifications","browserMapsKey","push","cloud","cardFields","_u"];
+const DEVICE_SETTINGS=["financeVisible","soundNotifications","browserMapsKey","push","cloud","cardFields","motion","_u"];
 let syncSnap=null;
 function sharedSettingsStr(st){const o={};Object.keys(st.settings||{}).sort().forEach(k=>{if(!DEVICE_SETTINGS.includes(k))o[k]=st.settings[k];});return JSON.stringify(o);}
 function itemStr(it){const {_u,...rest}=it;return JSON.stringify(rest);}
@@ -305,8 +305,8 @@ function payRow(j){const F=fin(j),bk=getBooker(j)?.name||"",over=F.due>0&&!isNot
 function payMessage(j){const F=fin(j),b=getBooker(j);const greet=b?.name?`Chào ${b.name.replace(/^(anh|chị|c|a)\s+/i,"")} ạ,`:"Chào anh/chị ạ,";return `${greet}\n\nEm Thiên Ân đây. Em gửi lại thông tin thanh toán show “${j.title}” ngày ${fmtDate(j.date)}:\n• Giá trị: ${money(F.total)}\n• Đã nhận: ${money(F.received)}\n• Còn lại: ${money(F.due)}\n\nAnh/chị thu xếp giúp em phần còn lại khi tiện nhé. Cảm ơn anh/chị nhiều ạ!`;}
 function openPayMessage(id){const j=state.jobs.find(x=>x.id===id);if(!j)return;openModal(`<div class="sheet-head"><div><div class="eyebrow">NHẮC THANH TOÁN</div><h2>${esc(j.title)}</h2></div><button class="close" onclick="closeModal()">×</button></div><div class="small" style="margin-bottom:8px">Sửa lại cho hợp ngữ cảnh rồi gửi qua Zalo / Messenger.</div><textarea id="payMsg" class="field-control pay-msg">${esc(payMessage(j))}</textarea><div class="pay-msg-actions"><button class="outline-btn" onclick="copyText(document.getElementById('payMsg').value,this)">Copy</button>${navigator.share?`<button class="black-btn" onclick="navigator.share({text:document.getElementById('payMsg').value}).catch(()=>{})">Gửi qua…</button>`:""}${getBooker(j)?.messengerLink?`<button class="outline-btn" onclick="copyText(document.getElementById('payMsg').value);openMessenger('${getBooker(j).id}')">Copy & mở Messenger</button>`:""}</div>`);}
 function bulkPaid(ids){const list=state.jobs.filter(j=>ids.includes(j.id));if(!list.length)return;if(!confirm(`Đánh dấu ĐÃ THU ĐỦ cho ${list.length} show?\n\n${list.slice(0,8).map(j=>`• ${fmtDate(j.date)} — ${j.title}`).join("\n")}${list.length>8?`\n… và ${list.length-8} show khác`:""}\n\nCó thể bỏ đánh dấu từng show trong chi tiết job.`))return;list.forEach(j=>j.paidFull=true);save();render();showToast(`Đã ghi nhận ${list.length} show thu đủ ✓`);}
-function quickPaid(id){const j=state.jobs.find(x=>x.id===id);if(!j)return;if(!confirm(`Ghi nhận khách đã thanh toán đủ cho “${j.title}”?`))return;j.paidFull=true;save();render();showToast("Đã ghi nhận thanh toán đủ ✓");}
-function markPaid(id,on=true){const j=state.jobs.find(x=>x.id===id);if(!j)return;j.paidFull=on;save();render();openJob(id);showToast(on?"Đã ghi nhận: khách thanh toán đủ ✓":"Đã bỏ đánh dấu thanh toán");}
+function quickPaid(id){const j=state.jobs.find(x=>x.id===id);if(!j)return;if(!confirm(`Ghi nhận khách đã thanh toán đủ cho “${j.title}”?`))return;j.paidFull=true;save();render();celebrate("ĐÃ THU ĐỦ");showToast("Đã ghi nhận thanh toán đủ ✓");}
+function markPaid(id,on=true){const j=state.jobs.find(x=>x.id===id);if(!j)return;j.paidFull=on;save();render();openJob(id);if(on)celebrate("ĐÃ THU ĐỦ");showToast(on?"Đã ghi nhận: khách thanh toán đủ ✓":"Đã bỏ đánh dấu thanh toán");}
 function normalizeJobs(){
   state.jobs.forEach(j=>{
     if(j.commission===undefined){j.commission=Number(j.balancePaid||0);j.balancePaid=0;}
@@ -354,6 +354,7 @@ function render(){
   const manifestLink=document.getElementById("themeManifest");
   if(manifestLink) manifestLink.href=`manifest-${state.settings.theme}.json`;
   document.getElementById("content").innerHTML=pages[page]();
+  afterRender();
 }
 const SHOW_GRACE_MS=3*3600000, MEETING_GRACE_MS=3600000;
 function hasTime(x){return /^\d{2}:\d{2}$/.test(x?.time||"");}
@@ -792,6 +793,7 @@ more(){
  <div class="settings-list">
   <div class="setting-card"><div class="setting-icon">${icon("edit",18)}</div><div class="setting-main"><b>Tên ứng dụng</b><span>${esc(state.settings.appName)}</span></div><button class="small-black" onclick="setAppName()">Đổi</button></div>
   <div class="setting-card"><div class="setting-icon">${icon("bell",18)}</div><div class="setting-main"><b>Thông báo</b><span>${(()=>{const st=notifyStatus;if(!st)return "Bật nhắc show, lịch họp, thu tiền trên từng máy";return notifyReady(st)?`Máy này đang nhận ✓ · ${st.devices.length} máy đã bật`:"Máy này chưa nhận — chạm để bật";})()}</span></div><button class="small-black" onclick="navigate('notify')">Mở</button></div>
+  <div class="setting-card"><div class="setting-icon">${icon("eye",18)}</div><div class="setting-main"><b>Hiệu ứng chuyển động</b><span>${state.settings.motion===false?"Đang tắt":"Đang bật"} · chuyển trang, nảy nút, số chạy, đóng dấu khi thu đủ tiền · chỉ máy này</span></div><button class="small-black" onclick="toggleMotion()">${state.settings.motion===false?"Bật":"Tắt"}</button></div>
   <div class="setting-card"><div class="setting-icon">${icon("calendar",18)}</div><div class="setting-main"><b>Báo cáo thu nhập</b><span>Theo tháng, booker, loại show · xuất Excel</span></div><button class="small-black" onclick="navigate('report')">Mở</button></div>
   <div class="setting-card"><div class="setting-icon">${icon("check",18)}</div><div class="setting-main"><b>Mã truy cập dữ liệu</b><span>${accessKey()?"Máy này đã nhập mã ✓":"Máy này chưa nhập mã"} · bảo vệ dữ liệu trên máy chủ</span></div><button class="small-black" onclick="askAccessKey(true)">${accessKey()?"Đổi":"Nhập"}</button></div>
   <div class="setting-card"><div class="setting-icon">${icon("link",18)}</div><div class="setting-main"><b>Máy chủ dữ liệu &amp; thông báo</b><span>${cloudUrl()?esc(cloudUrl().replace(/^https:\/\//,"")):"Chưa kết nối"} · chép dữ liệu từ Netlify cũ</span></div><button class="small-black" onclick="openSetup(true)">Mở</button></div>
@@ -1511,6 +1513,68 @@ async function startApp(){
     },1500);
   },0);
 }
+// ---- V28.1: Hiệu ứng chuyển động (lấy ý tưởng từ app Giáo Án Địa Ngục) ----
+// Chỉ chạy khi chuyển trang / bấm nút — các lần vẽ lại do đồng bộ thì không giật lại. Tắt được ở Khác, và tự tắt
+// khi máy bật "Giảm chuyển động" (Cài đặt → Trợ năng).
+const reduceMotionMq=window.matchMedia?matchMedia("(prefers-reduced-motion: reduce)"):{matches:false};
+function motionOn(){return state?.settings?.motion!==false&&!reduceMotionMq.matches;}
+function applyMotionAttr(){document.documentElement.dataset.motion=motionOn()?"on":"off";}
+function toggleMotion(){state.settings.motion=state.settings.motion===false;save(true);applyMotionAttr();render();showToast(state.settings.motion===false?"Đã tắt hiệu ứng":"Đã bật hiệu ứng ✨");}
+const STAGGER_SEL=".hero,.metric-card,.timeline-item,.job-row,.pay-row,.pay-sum-card,.setting-card,.meeting-item,.work-alert,.rep-row,.notify-nudge,.backup-nudge,.calendar-card,.nt-step,.nt-dev,.empty";
+let lastPageRendered="",lastTap=null;
+document.addEventListener("click",e=>{const el=e.target.closest&&e.target.closest("[onclick]");if(el)lastTap={a:el.getAttribute("onclick"),t:Date.now()};},true);
+function afterRender(){
+  applyMotionAttr();
+  const c=document.getElementById("content"),entered=page!==lastPageRendered;lastPageRendered=page;
+  if(!motionOn()){c.classList.remove("enter");return;}
+  if(entered){
+    c.classList.remove("enter");void c.offsetWidth;c.classList.add("enter");clearTimeout(c._mt);c._mt=setTimeout(()=>c.classList.remove("enter"),1400);
+    let k=0;c.querySelectorAll(STAGGER_SEL).forEach(el=>{if(el.parentElement.closest(".timeline-item,.job-row,.pay-row,.setting-card"))return;el.style.setProperty("--k",Math.min(k++,12));});
+    c.querySelectorAll(".rep-col,.pay-bar,.cal-day").forEach((el,i)=>el.style.setProperty("--k",Math.min(i,24)));
+    countUp(c);
+    const tb=document.querySelector(`.tabbar button[data-page="${page}"]`);if(tb){tb.classList.remove("pop");void tb.offsetWidth;tb.classList.add("pop");}
+  }
+  c.querySelectorAll(".hero").forEach(h=>{if(!h.querySelector(".mc-shine"))h.insertAdjacentHTML("beforeend",'<i class="mc-shine" aria-hidden="true"></i>');});
+  // Nút vừa bấm (lọc, chọn ngày, tab nhỏ…) nảy nhẹ sau khi vẽ lại
+  if(lastTap&&Date.now()-lastTap.t<700){const sel=`[onclick="${CSS.escape?CSS.escape(lastTap.a):lastTap.a}"]`;let el=null;try{el=c.querySelector(sel);}catch(_){}
+    if(el){el.classList.remove("tap-pop");void el.offsetWidth;el.classList.add("tap-pop");setTimeout(()=>el.classList.remove("tap-pop"),500);}lastTap=null;}
+}
+// Số tiền / số show chạy từ 0 lên khi mở trang
+function countUp(root){
+  const els=root.querySelectorAll(".metric-card strong,.pay-sum-card b,.rep-kpi b,.profile-stat b");
+  els.forEach(el=>{
+    const tn=[...el.childNodes].find(n=>n.nodeType===3&&/\d/.test(n.nodeValue));if(!tn)return;
+    const m=tn.nodeValue.match(/\d{1,3}(?:\.\d{3})+|\d+/);if(!m)return;
+    const target=Number(m[0].replace(/\./g,""));if(!Number.isFinite(target)||target<2)return;
+    const dotted=m[0].includes("."),pre=tn.nodeValue.slice(0,m.index),post=tn.nodeValue.slice(m.index+m[0].length);
+    const fmt=v=>dotted?new Intl.NumberFormat("vi-VN").format(v):String(v);
+    const t0=performance.now(),dur=Math.min(900,420+String(target).length*45);
+    const step=now=>{if(!tn.isConnected)return;const p=Math.min(1,(now-t0)/dur),e=1-Math.pow(1-p,3);const v=p<1?Math.round(target*e):target;tn.nodeValue=pre+fmt(v)+post;if(p<1)requestAnimationFrame(step);};
+    tn.nodeValue=pre+fmt(0)+post;requestAnimationFrame(step);
+  });
+}
+// Đóng dấu "ĐÃ THU ĐỦ" khi ghi nhận khách thanh toán xong
+function celebrate(text){
+  if(!motionOn())return;
+  try{navigator.vibrate&&navigator.vibrate([12,40,18]);}catch(_){}
+  const d=document.createElement("div");d.className="mc-stamp";d.innerHTML=`<span>${esc(text)}</span>`;
+  for(let i=0;i<14;i++){const b=document.createElement("i");b.style.setProperty("--a",(i*360/14)+"deg");b.style.setProperty("--d",(70+Math.random()*60)+"px");b.style.setProperty("--h",(i*47)%360);d.appendChild(b);}
+  document.body.appendChild(d);setTimeout(()=>d.classList.add("out"),1050);setTimeout(()=>d.remove(),1500);
+}
+// Kéo xuống ở đầu trang để lấy dữ liệu mới từ máy chủ
+(function pullToRefresh(){
+  let y0=null,dy=0,el=null;
+  const ok=()=>!localMode&&window.scrollY<=0&&document.getElementById("modal").classList.contains("hidden")&&!document.documentElement.classList.contains("reader-open");
+  document.addEventListener("touchstart",e=>{if(!ok()||e.touches.length!==1){y0=null;return;}y0=e.touches[0].clientY;dy=0;},{passive:true});
+  document.addEventListener("touchmove",e=>{if(y0==null)return;dy=e.touches[0].clientY-y0;if(dy<=0||window.scrollY>0){if(el)el.style.opacity=0;return;}
+    if(!el){el=document.createElement("div");el.id="mcPtr";el.innerHTML="<i></i>";document.body.appendChild(el);}
+    const p=Math.min(1,dy/90);el.style.opacity=p;el.style.transform=`translateY(${Math.min(dy,110)*.5}px) rotate(${dy*3}deg)`;el.classList.toggle("ready",dy>90);},{passive:true});
+  document.addEventListener("touchend",async()=>{if(y0==null||!el){y0=null;return;}const go=dy>90;y0=null;
+    if(!go){el.style.opacity=0;return;}
+    el.classList.add("spin");try{navigator.vibrate&&navigator.vibrate(10);}catch(_){}
+    lastPull=0;const r=await loadCloud(true).catch(()=>false);render();
+    el.classList.remove("spin","ready");el.style.opacity=0;showToast(r?"Đã cập nhật dữ liệu mới nhất ✓":"Chưa kết nối được máy chủ");},{passive:true});
+})();
 startApp();
 function soundSettingEnabled(){return state.settings.soundNotifications!==false;}
 function playNotifySound(kind="soft"){
