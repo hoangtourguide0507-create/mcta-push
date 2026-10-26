@@ -969,3 +969,8 @@ button{color:inherit}
 .two-themes .theme-copy span{font-size:11.5px;line-height:1.4}
 .two-themes .theme-check{position:absolute!important;top:16px;right:16px;width:26px;height:26px;font-size:14px;z-index:2}
 :root[data-theme="pop"] .two-themes .theme-card.theme-stage,:root[data-theme="stage"] .two-themes .theme-card.theme-pop{opacity:.92}
+/* V28.4 · trạng thái tự động lưu */
+.ne-saved{font-size:11px;font-weight:700;color:var(--muted);white-space:nowrap;min-height:13px;line-height:1.2}
+.ne-saved.ok{color:#0fa36b}
+:root[data-theme="stage"] .ne-saved.ok{color:var(--mint)}
+.note-editor.typing .ne-head .ne-saved{display:block}

@@ -1,5 +1,5 @@
 
-const APP_VERSION="V28.3";
+const APP_VERSION="V28.4";
 // V28.0: app chạy trên GitHub Pages; dữ liệu + thông báo nằm trên máy chủ Cloudflare riêng (mcta-push).
 const CLOUD_DEFAULT="https://mcta-push.hoangtourguide0507.workers.dev";
 const KEY="freelance_planner_v12";
@@ -1082,8 +1082,8 @@ function openNote(existing=null,opts={}){
   const dr=noteDraftGet(n.id);let restored=false;
   if(dr&&dr.html!==noteHtml(n)&&(!n.updatedAt||dr.at>Date.parse(n.updatedAt))&&confirm(`Có bản nháp chưa lưu (${relTime(dr.at)}) của kịch bản này. Mở bản nháp?`)){n={...n,title:dr.title||n.title,html:dr.html,jobId:dr.jobId??n.jobId,kind:dr.kind||n.kind};restored=true;}else if(dr)noteDraftClear(n.id);
   const tb=(cmd,label,title,cls="")=>`<button type="button" class="tb ${cls}" data-cmd="${cmd}" onclick="${cmd}" title="${title}" aria-label="${title}">${label}</button>`;
-  openModal(`<form class="note-editor" data-id="${esc(n.id)}" onsubmit="saveNote(event,'${n.id}')" oninput="noteDirty=true;noteDraftSoon()" onchange="noteDirty=true;noteDraftSoon()">
-   <div class="ne-head"><button type="button" class="close" onclick="closeNoteEditor()" aria-label="Đóng">×</button><div class="ne-title-wrap"><div class="eyebrow">${n.id?"SỬA KỊCH BẢN":"KỊCH BẢN MỚI"}</div><div class="ne-mini-title">${esc(n.title||"Kịch bản mới")}</div></div><div class="ne-size" onpointerdown="if(event.target.closest('button'))event.preventDefault()"><button type="button" class="rd-btn ne-undo" id="tbUndo" onclick="rteUndo()" title="Hoàn tác" aria-label="Hoàn tác">↶</button><button type="button" class="rd-btn ne-undo" id="tbRedo" onclick="rteRedo()" title="Làm lại" aria-label="Làm lại">↷</button></div><button type="button" class="ne-done" onclick="rteDone()">Xong</button><button class="ne-save">Lưu</button></div>
+  openModal(`<form class="note-editor" data-id="${esc(n.id)}" onsubmit="saveNote(event)" oninput="noteDirty=true;noteDraftSoon();noteAutoSoon()" onchange="noteDirty=true;noteDraftSoon();noteAutoSoon()">
+   <div class="ne-head"><button type="button" class="close" onclick="closeNoteEditor()" aria-label="Đóng">×</button><div class="ne-title-wrap"><div class="eyebrow">${n.id?"SỬA KỊCH BẢN":"KỊCH BẢN MỚI"}</div><div class="ne-mini-title">${esc(n.title||"Kịch bản mới")}</div><div class="ne-saved" id="neSaved">${n.id?"Tự động lưu":""}</div></div><div class="ne-size" onpointerdown="if(event.target.closest('button'))event.preventDefault()"><button type="button" class="rd-btn ne-undo" id="tbUndo" onclick="rteUndo()" title="Hoàn tác" aria-label="Hoàn tác">↶</button><button type="button" class="rd-btn ne-undo" id="tbRedo" onclick="rteRedo()" title="Làm lại" aria-label="Làm lại">↷</button></div><button type="button" class="ne-done" onclick="rteDone()">Xong</button><button class="ne-save">Lưu</button></div>
    <div class="ne-meta-wrap">
     <input class="ne-title" name="title" value="${esc(n.title)}" placeholder="Tiêu đề (vd: Kịch bản lễ cưới Minh & Lan)" oninput="const t=document.querySelector('.ne-mini-title');if(t)t.textContent=this.value||'Kịch bản mới'">
     <div class="ne-meta"><label class="ne-job"><span>${icon("jobs",14)} Job</span><select name="jobId">${noteJobOptions(n.jobId)}</select></label><label class="ne-kind"><select name="kind"><option value="script" ${noteKind(n)==="script"?"selected":""}>Kịch bản</option><option value="lovestory" ${noteKind(n)==="lovestory"?"selected":""}>Love Story</option></select></label></div>
@@ -1102,7 +1102,7 @@ function openNote(existing=null,opts={}){
    <div class="ne-actions">${n.id?`<button type="button" class="outline-btn danger-text" onclick="deleteNote('${n.id}',true)">Xoá</button><button type="button" class="outline-btn" onclick="saveNoteThenRead('${n.id}')">Đọc</button><button type="button" class="outline-btn" onclick="saveNoteThenExport('${n.id}')">Word</button>`:""}<button class="black-btn submit">Lưu kịch bản</button></div>
   </form>`);
   document.getElementById("modal").classList.add("editor-mode");
-  rteInit();fitEditor();rteStat();if(restored){noteDirty=true;showToast("Đã mở bản nháp chưa lưu");}
+  rteInit();fitEditor();rteStat();if(restored){noteDirty=true;noteAutoSave();showToast("Đã khôi phục và lưu bản nháp ✓");}
 }
 // ---- V28.2: thanh công cụ soạn kịch bản đầy đủ hơn ----
 const RTE_FORE=[["#e5304f","Đỏ"],["#2563eb","Xanh dương"],["#059669","Xanh lá"],["#ea580c","Cam"],["#7c3aed","Tím"],["#111827","Đen"]];
@@ -1145,7 +1145,7 @@ function fitEditor(){const m=document.getElementById("modal"),vv=window.visualVi
 if(window.visualViewport){visualViewport.addEventListener("resize",fitEditor);visualViewport.addEventListener("scroll",fitEditor);}
 // Bàn phím đóng mà trang còn bị đẩy lệch → kéo về đúng chỗ để các nút bấm lại được.
 document.addEventListener("focusout",()=>{if(!document.documentElement.classList.contains("modal-open"))return;setTimeout(()=>{const a=document.activeElement;if(a&&(a.isContentEditable||/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)))return;if(window.scrollY)window.scrollTo(0,0);fitEditor();},120);});
-function closeNoteEditor(){if(noteDirty&&!confirm("Đóng mà không lưu thay đổi?"))return;clearTimeout(noteDraftTimer);noteDraftClear(document.querySelector("#modalCard form.note-editor")?.dataset.id);noteDirty=false;const jid=document.querySelector("#modalCard select[name=jobId]")?.value;closeModal();if(openJobAfterNote&&jid){openJobAfterNote=false;openJob(jid);}openJobAfterNote=false;}
+function closeNoteEditor(){if(noteDirty&&noteAutoSave())showToast("Đã lưu kịch bản ✓");clearTimeout(noteDraftTimer);clearTimeout(noteAutoTimer);noteDraftClear(document.querySelector("#modalCard form.note-editor")?.dataset.id);noteDirty=false;const jid=document.querySelector("#modalCard select[name=jobId]")?.value;closeModal();if(openJobAfterNote&&jid){openJobAfterNote=false;openJob(jid);}openJobAfterNote=false;}
 function saveNoteThenRead(id){const f=document.querySelector("#modalCard form.note-editor");if(noteDirty){f.requestSubmit();setTimeout(()=>openReader(id),150);}else{closeModal();openReader(id);}}
 function deleteNote(id,fromModal){const n=state.notes.find(x=>x.id===id);if(!n)return;if(!confirm(`Xoá note “${n.title||"(Không tiêu đề)"}”? Máy trợ lý cũng sẽ xoá theo.`))return;state.notes=state.notes.filter(x=>x.id!==id);save();if(fromModal)closeModal();render();showToast("Đã xoá note");}
 // ---- V23.3: Chế độ đọc toàn màn hình (chạy hoàn toàn trên máy, không dùng mạng) ----
@@ -1239,7 +1239,35 @@ async function exportNoteDocx(id){
   const a=document.createElement("a");a.href=URL.createObjectURL(file);a.download=file.name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},1500);showToast("Đã xuất file Word ✓");
 }
 function saveNoteThenExport(id){const f=document.querySelector("#modalCard form.note-editor");if(noteDirty&&f){f.requestSubmit();setTimeout(()=>exportNoteDocx(id),200);}else exportNoteDocx(id);}
-function saveNote(e,id){e.preventDefault();clearTimeout(noteDraftTimer);noteDraftClear(id);const d=Object.fromEntries(new FormData(e.target).entries());d.title=String(d.title||"").trim()||"Kịch bản không tên";const ed=document.getElementById("noteBody");if(ed){d.html=sanitizeHtml(ed.innerHTML);d.body=htmlToText(d.html);}const now=new Date().toISOString();d.updatedAt=now;if(id)Object.assign(state.notes.find(n=>n.id===id),d);else state.notes.push({...d,id:makeId(),createdAt:now});noteDirty=false;save();closeModal();render();if(page==="notes"||!id)showToast("Đã lưu kịch bản ✓");const jid=d.jobId;const m=document.getElementById("modal");if(openJobAfterNote&&jid){openJobAfterNote=false;openJob(jid);}}
+function saveNote(e){e.preventDefault();clearTimeout(noteDraftTimer);clearTimeout(noteAutoTimer);const f=e.target,had=!!f.dataset.id;const id=persistNote(f);noteDirty=false;if(id)save();const jid=f.elements.jobId?.value;closeModal();render();if(id&&(page==="notes"||!had))showToast("Đã lưu kịch bản ✓");if(openJobAfterNote&&jid){openJobAfterNote=false;openJob(jid);}}
+// ---- V28.4: tự động lưu kịch bản ----
+// Gõ xong ~1,5 giây là lưu vào app và đồng bộ lên máy chủ; thoát app / tắt màn hình cũng lưu ngay. Không cần bấm Lưu.
+function noteFormData(f){const d=Object.fromEntries(new FormData(f).entries());d.title=String(d.title||"").trim();const ed=rteEl();if(ed){d.html=sanitizeHtml(ed.innerHTML);d.body=htmlToText(d.html);}return d;}
+function persistNote(f){
+  const d=noteFormData(f);let id=f.dataset.id||"";
+  if(!id&&!d.title&&!String(d.body||"").trim())return "";   // kịch bản mới còn trống thì chưa tạo
+  d.title=d.title||"Kịch bản không tên";const now=new Date().toISOString();d.updatedAt=now;
+  const ex=id&&state.notes.find(n=>n.id===id);
+  if(ex)Object.assign(ex,d);else{id=id||makeId();state.notes.push({...d,id,createdAt:now});f.dataset.id=id;noteCreatedInEditor(f,id);}
+  noteDraftClear("");noteDraftClear(id);return id;
+}
+function noteCreatedInEditor(f,id){
+  const eb=f.querySelector(".ne-head .eyebrow");if(eb)eb.textContent="SỬA KỊCH BẢN";
+  const act=f.querySelector(".ne-actions");if(act&&!act.querySelector(".danger-text"))act.insertAdjacentHTML("afterbegin",`<button type="button" class="outline-btn danger-text" onclick="deleteNote('${id}',true)">Xoá</button><button type="button" class="outline-btn" onclick="saveNoteThenRead('${id}')">Đọc</button><button type="button" class="outline-btn" onclick="saveNoteThenExport('${id}')">Word</button>`);
+}
+let noteAutoTimer=null;
+function noteAutoSoon(){clearTimeout(noteAutoTimer);noteSavedLabel("Đang gõ…");noteAutoTimer=setTimeout(noteAutoSave,1500);}
+function noteAutoSave(){
+  clearTimeout(noteAutoTimer);const f=document.querySelector("#modalCard form.note-editor");
+  if(!f||!noteDirty||document.getElementById("modal").classList.contains("hidden"))return false;
+  const id=persistNote(f);if(!id){noteSavedLabel("");return false;}
+  noteDirty=false;save();
+  const t=new Date();noteSavedLabel(`Đã lưu ✓ ${pad2(t.getHours())}:${pad2(t.getMinutes())}`,true);return true;
+}
+function noteSavedLabel(text,ok){const el=document.getElementById("neSaved");if(!el)return;el.textContent=text;el.classList.toggle("ok",!!ok);}
+// Thoát app, chuyển app khác, khoá màn hình → lưu ngay
+document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="hidden")noteAutoSave();});
+window.addEventListener("pagehide",()=>{noteAutoSave();});
 var openJobAfterNote=false;
 function openModal(html){const c=document.getElementById("modalCard");c.innerHTML=html;c.scrollTop=0;c.scrollLeft=0;document.getElementById("modal").classList.remove("hidden");document.documentElement.classList.add("modal-open")}
 function closeModal(){const md=document.getElementById("modal");md.style.top="";md.style.height="";md.classList.add("hidden");document.getElementById("modal").classList.remove("editor-mode");document.documentElement.classList.remove("modal-open");if(pendingRender){pendingRender=false;setTimeout(render,0);}}
