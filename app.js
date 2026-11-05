@@ -1,5 +1,5 @@
 
-const APP_VERSION="V28.4";
+const APP_VERSION="V28.5";
 // V28.0: app chạy trên GitHub Pages; dữ liệu + thông báo nằm trên máy chủ Cloudflare riêng (mcta-push).
 const CLOUD_DEFAULT="https://mcta-push.hoangtourguide0507.workers.dev";
 const KEY="freelance_planner_v12";
@@ -153,6 +153,32 @@ function save(localOnly=false){
 }
 function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]));}
 function money(n){return new Intl.NumberFormat("vi-VN",{style:"currency",currency:"VND",maximumFractionDigits:0}).format(Number(n||0));}
+// ---- V28.5: Âm lịch Việt Nam (thuật toán Hồ Ngọc Đức, múi giờ +7) ----
+const LUNAR=(()=>{const PI=Math.PI,INT=Math.floor,TZ=7;
+  const jd=(d,m,y)=>{const a=INT((14-m)/12),yy=y+4800-a,mm=m+12*a-3;let j=d+INT((153*mm+2)/5)+365*yy+INT(yy/4)-INT(yy/100)+INT(yy/400)-32045;if(j<2299161)j=d+INT((153*mm+2)/5)+365*yy+INT(yy/4)-32083;return j;};
+  const newMoon=k=>{const T=k/1236.85,T2=T*T,T3=T2*T,dr=PI/180;let Jd1=2415020.75933+29.53058868*k+0.0001178*T2-0.000000155*T3;Jd1+=0.00033*Math.sin((166.56+132.87*T-0.009173*T2)*dr);
+    const M=359.2242+29.10535608*k-0.0000333*T2-0.00000347*T3,Mpr=306.0253+385.81691806*k+0.0107306*T2+0.00001236*T3,F=21.2964+390.67050646*k-0.0016528*T2-0.00000239*T3;
+    let C1=(0.1734-0.000393*T)*Math.sin(M*dr)+0.0021*Math.sin(2*dr*M)-0.4068*Math.sin(Mpr*dr)+0.0161*Math.sin(dr*2*Mpr)-0.0004*Math.sin(dr*3*Mpr)+0.0104*Math.sin(dr*2*F)-0.0051*Math.sin(dr*(M+Mpr))-0.0074*Math.sin(dr*(M-Mpr))+0.0004*Math.sin(dr*(2*F+M))-0.0004*Math.sin(dr*(2*F-M))-0.0006*Math.sin(dr*(2*F+Mpr))+0.0010*Math.sin(dr*(2*F-Mpr))+0.0005*Math.sin(dr*(2*Mpr+M));
+    const dt=T<-11?0.001+0.000839*T+0.0002261*T2-0.00000845*T3-0.000000081*T*T3:-0.000278+0.000265*T+0.000262*T2;return Jd1+C1-dt;};
+  const nmDay=k=>INT(newMoon(k)+0.5+TZ/24);
+  const sunLong=j=>{const T=(j-2451545.5-TZ/24)/36525,T2=T*T,dr=PI/180,M=357.52910+35999.05030*T-0.0001559*T2-0.00000048*T*T2,L0=280.46645+36000.76983*T+0.0003032*T2;
+    let DL=(1.914600-0.004817*T-0.000014*T2)*Math.sin(dr*M)+(0.019993-0.000101*T)*Math.sin(dr*2*M)+0.000290*Math.sin(dr*3*M);let L=(L0+DL)*dr;L-=PI*2*INT(L/(PI*2));return INT(L/PI*6);};
+  const m11=y=>{const off=jd(31,12,y)-2415021,k=INT(off/29.530588853);let nm=nmDay(k);if(sunLong(nm)>=9)nm=nmDay(k-1);return nm;};
+  const leapOff=a11=>{const k=INT((a11-2415021.076998695)/29.530588853+0.5);let last=0,i=1,arc=sunLong(nmDay(k+i));do{last=arc;i++;arc=sunLong(nmDay(k+i));}while(arc!==last&&i<14);return i-1;};
+  const CAN=["Giáp","Ất","Bính","Đinh","Mậu","Kỷ","Canh","Tân","Nhâm","Quý"],CHI=["Tý","Sửu","Dần","Mão","Thìn","Tỵ","Ngọ","Mùi","Thân","Dậu","Tuất","Hợi"];
+  const cache=new Map();
+  function fromSolar(d,m,y){const key=y*10000+m*100+d;if(cache.has(key))return cache.get(key);
+    const day=jd(d,m,y),k=INT((day-2415021.076998695)/29.530588853);let ms=nmDay(k+1);if(ms>day)ms=nmDay(k);
+    let a11=m11(y),b11=a11,ly;if(a11>=ms){ly=y;a11=m11(y-1);}else{ly=y+1;b11=m11(y+1);}
+    const ld=day-ms+1,diff=INT((ms-a11)/29);let leap=false,lm=diff+11;
+    if(b11-a11>365){const lo=leapOff(a11);if(diff>=lo){lm=diff+10;if(diff===lo)leap=true;}}
+    if(lm>12)lm-=12;if(lm>=11&&diff<4)ly-=1;
+    const r={day:ld,month:lm,year:ly,leap,yearName:CAN[(ly+6)%10]+" "+CHI[(ly+8)%12]};if(cache.size>4000)cache.clear();cache.set(key,r);return r;}
+  return {fromSolar,ofDate:s=>{const p=String(s||"").split("-").map(Number);return p.length===3&&p[0]?fromSolar(p[2],p[1],p[0]):null;}};
+})();
+function lunarLine(ds){const l=LUNAR.ofDate(ds);if(!l)return "";const tag=l.day===1?" · Mùng 1":l.day===15?" · Rằm":"";return `Âm lịch ${l.day}/${l.month}${l.leap?" nhuận":""} năm ${l.yearName}${tag}`;}
+document.addEventListener("input",e=>{if(e.target&&e.target.name==="date"&&e.target.closest("form.job-form")){const h=document.getElementById("formLunar");if(h)h.textContent=e.target.value?"Âm lịch "+lunarText(e.target.value,true):"";}});
+function lunarText(ds,withYear){const l=LUNAR.ofDate(ds);if(!l)return "";return `${l.day}/${l.month}${l.leap?" nhuận":""}${withYear?" "+l.yearName:""}`;}
 function fmtDate(s){return new Date(s+"T00:00:00").toLocaleDateString("vi-VN",{day:"2-digit",month:"2-digit",year:"numeric"});}
 function fmtLong(s){return new Date(s+"T00:00:00").toLocaleDateString("vi-VN",{weekday:"long",day:"2-digit",month:"2-digit",year:"numeric"});}
 function daysFromNow(dateStr){const a=new Date();a.setHours(0,0,0,0);const b=new Date(dateStr+"T00:00:00");return Math.round((b-a)/86400000);}
@@ -632,14 +658,14 @@ home(){
 calendar(){
  const y=calendarDate.getFullYear(),m=calendarDate.getMonth(),first=new Date(y,m,1),last=new Date(y,m+1,0),start=(first.getDay()+6)%7,cells=[];
  for(let i=0;i<start;i++)cells.push(`<div class="cal-day muted"></div>`);
- for(let d=1;d<=last.getDate();d++){const ds=`${y}-${String(m+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`,count=state.jobs.filter(j=>j.date===ds).length,meets=state.jobs.reduce((n,j)=>n+(j.meetings||[]).filter(m=>m.date===ds).length,0);cells.push(`<button class="cal-day ${calendarState(ds)} ${ds===selectedDate?"selected":""}" aria-label="${fmtDate(ds)} ${count?count+" show":"trống"}" onclick="selectedDate='${ds}';calView='day';render()"><span>${d}</span>${count?`<i>${count}</i>`:""}${meets?`<b class="meet-dot" title="${meets} lịch họp"></b>`:""}</button>`)}
+ for(let d=1;d<=last.getDate();d++){const ds=`${y}-${String(m+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`,count=state.jobs.filter(j=>j.date===ds).length,meets=state.jobs.reduce((n,j)=>n+(j.meetings||[]).filter(m=>m.date===ds).length,0);cells.push(`<button class="cal-day ${calendarState(ds)} ${ds===selectedDate?"selected":""}" aria-label="${fmtDate(ds)} ${count?count+" show":"trống"}" onclick="selectedDate='${ds}';calView='day';render()"><span>${d}</span>${(()=>{const l=LUNAR.fromSolar(d,m+1,y);return `<small class="lunar${l.day===1?" l1":l.day===15?" l15":""}">${l.day===1?`${l.day}/${l.month}${l.leap?"n":""}`:l.day}</small>`;})()}<em class="cal-dots">${count?`<i>${count}</i>`:""}${meets?`<b class="meet-dot" title="${meets} lịch họp"></b>`:""}</em></button>`)}
  const monthKey=`${y}-${String(m+1).padStart(2,"0")}`;
  const monthJobs=state.jobs.filter(j=>(j.date||"").startsWith(monthKey)).sort(byStart);
  const dayJobs=state.jobs.filter(j=>j.date===selectedDate).sort((a,b)=>(a.time||"").localeCompare(b.time||""));
  const dayMeets=[];state.jobs.forEach(j=>(j.meetings||[]).forEach(m=>{if(m.date===selectedDate)dayMeets.push({job:j,m});}));dayMeets.sort((a,b)=>(a.m.time||"").localeCompare(b.m.time||""));
  return `<div class="calendar-card"><div class="month-row"><button class="ghost-btn" onclick="changeMonth(-1)">${icon("back",17)}</button><div class="month-label">${calendarDate.toLocaleDateString("vi-VN",{month:"long",year:"numeric"})}</div><button class="ghost-btn" onclick="changeMonth(1)">${icon("chevron",17)}</button></div><div class="weekdays">${["T2","T3","T4","T5","T6","T7","CN"].map(x=>`<span>${x}</span>`).join("")}</div><div class="cal-grid">${cells.join("")}</div><div class="calendar-legend"><span class="legend-item"><i class="legend-dot legend-empty"></i> Trống</span><span class="legend-item"><i class="legend-dot legend-confirmed"></i> Có show</span><span class="legend-item"><i class="legend-dot legend-meet"></i> Có lịch họp</span></div></div><div class="seg-switch"><button class="${calView!=="month"?"on":""}" onclick="calView='day';render()">Theo ngày</button><button class="${calView==="month"?"on":""}" onclick="calView='month';render()">Cả tháng (${monthJobs.length})</button></div>
  ${calView==="month"?`<section class="section"><div class="section-head"><div><div class="eyebrow">TẤT CẢ JOB TRONG THÁNG</div><h2>Tháng ${m+1}/${y}</h2></div><span class="small">${monthJobs.length} show${state.settings.financeVisible&&monthJobs.length?` · ${money(monthJobs.reduce((a,j)=>a+Number(j.total||0),0))}`:""}</span></div><div class="timeline">${monthJobs.map(timelineItem).join("")||'<div class="empty">Tháng này chưa có show.</div>'}</div></section>`
- :`<section class="section"><div class="section-head"><div><div class="eyebrow">NGÀY ĐANG CHỌN</div><h2>${fmtDate(selectedDate)}</h2></div><button class="text-btn" onclick="selectedDate=todayStr();calendarDate=new Date();render()">Hôm nay</button></div><div class="timeline">${dayJobs.map(timelineItem).join("")||(dayMeets.length?"":'<div class="empty">Ngày này chưa có show.</div>')}${dayMeets.map(x=>meetingItem(x.job,x.m)).join("")}</div></section>`}`;
+ :`<section class="section"><div class="section-head"><div><div class="eyebrow">NGÀY ĐANG CHỌN</div><h2>${fmtDate(selectedDate)}</h2><div class="lunar-line">${lunarLine(selectedDate)}</div></div><button class="text-btn" onclick="selectedDate=todayStr();calendarDate=new Date();render()">Hôm nay</button></div><div class="timeline">${dayJobs.map(timelineItem).join("")||(dayMeets.length?"":'<div class="empty">Ngày này chưa có show.</div>')}${dayMeets.map(x=>meetingItem(x.job,x.m)).join("")}</div></section>`}`;
 },
 jobs(){
  const filters=["Tất cả",...getJobTypeNames()];
@@ -839,7 +865,7 @@ function openJobForm(existing=null,opts={}){
  <form class="form job-form" data-draft-key="${j.id||"new"}" oninput="onJobFormEdit()" onchange="onJobFormEdit()" onsubmit="saveJob(event,'${j.id}')">
  ${field("Tên show","title",j.title,true)}
  <div class="two">${selectField("Loại","type",getJobTypeNames(),j.type)}</div>
- <div class="two">${field("Ngày","date",j.date,false,"date")}${field("Giờ","time",j.time,false,"time")}</div>
+ <div class="two">${field("Ngày","date",j.date,false,"date")}${field("Giờ","time",j.time,false,"time")}</div><div class="lunar-line form-lunar" id="formLunar">${j.date?"Âm lịch "+lunarText(j.date,true):""}</div>
  <div id="conflictWarn" class="conflict-warn" hidden></div>
  <div class="place-field">
    <label class="field"><span>Địa điểm</span><div id="placePicker"></div></label>
@@ -991,7 +1017,7 @@ function openJob(id){
  const checks=(j.checklist||[]).map(x=>`<label class="check"><input type="checkbox" ${x.done?"checked":""} onchange="toggleCheck('${j.id}','${x.id}',this.checked)"><span>${esc(x.text)}</span></label>`).join("");
  const rem=activeReminders(j);
  openModal(`<div class="sheet-head"><div><div class="tags header-tags">${typeChip(j.type)}${statusChip(j.status)}</div><h2>${esc(j.title)}</h2></div><button class="close" onclick="closeModal()">×</button></div>
- <div class="job-hero"><div class="job-hero-icon">${icon("calendar",22)}</div><div><b>${fmtLong(j.date)}${j.time?` • ${esc(j.time)}`:""}</b><span>${esc(j.locationName||j.location||"Chưa có địa điểm")}${j.locationAddress?`<br><small>${esc(j.locationAddress)}</small>`:""}</span>${(j.locationName||j.location||j.locationAddress)?`<a class="map-link" href="${esc(directionsUrl(placeQueryText(j.locationName||j.location,j.locationAddress),j.googleMapsURI))}" target="_blank" rel="noopener">${icon("pin",14)} Chỉ đường</a>`:""}</div></div>
+ <div class="job-hero"><div class="job-hero-icon">${icon("calendar",22)}</div><div><b>${fmtLong(j.date)}${j.time?` • ${esc(j.time)}`:""}</b><em class="lunar-line">Âm lịch ${lunarText(j.date,true)}</em><span>${esc(j.locationName||j.location||"Chưa có địa điểm")}${j.locationAddress?`<br><small>${esc(j.locationAddress)}</small>`:""}</span>${(j.locationName||j.location||j.locationAddress)?`<a class="map-link" href="${esc(directionsUrl(placeQueryText(j.locationName||j.location,j.locationAddress),j.googleMapsURI))}" target="_blank" rel="noopener">${icon("pin",14)} Chỉ đường</a>`:""}</div></div>
  <section class="section compact location-section"><div class="section-head"><h3>Vị trí & di chuyển</h3><span class="small">Miễn phí</span></div><div id="jobMapWrap"></div></section>
  ${b?`<div class="booker-strip"><button class="booker-main booker-open" onclick="openBooker('${b.id}')"><div class="booker-avatar">${esc(avatarText(b.name))}</div><div><div class="booker-name">${esc(b.name)}</div><div class="small">${b.phone?esc(b.phone):"Chưa có số điện thoại"}</div></div></button><div class="contact-actions" onclick="event.stopPropagation()">${b.messengerLink?`<button class="contact-btn messenger-btn" onclick="openMessenger('${b.id}')">${icon("messenger",16)} Messenger</button>`:""}${b.phone?`<a class="contact-btn call-btn" href="tel:${esc(b.phone)}">${icon("phone",16)} Gọi</a>`:""}</div></div>`:""}
  ${(()=>{const ms=jobMeetings(j);const tNow=new Date();tNow.setHours(0,0,0,0);return `<section class="section compact meeting-detail"><div class="section-head"><h3>Lịch họp</h3><button class="text-btn" onclick="openJobForm(state.jobs.find(x=>x.id==='${j.id}'));setTimeout(()=>document.querySelector('.meeting-box')?.scrollIntoView({behavior:'smooth'}),150)">${ms.length?"Cập nhật":"＋ Thêm"}</button></div>${ms.length?ms.map(m=>{const past=new Date(m.date+"T00:00:00")<tNow;const rem=(m.reminders||[]).filter(r=>r.enabled!==false);const href=m.mode==="Online"?safeHref(m.link):"";return `<div class="meeting-card ${past?"past":""}"><div class="meeting-when"><b>${esc(fmtLong(m.date))}${m.time?` • ${esc(m.time)}`:""}</b><span class="meet-mode meet-${m.mode==="Online"?"on":"off"}">${esc(m.mode)}</span></div><div class="meeting-where">${icon(m.mode==="Online"?"link":"pin",13)} ${esc(meetingWhere(m))}</div>${m.note?`<div class="small">${esc(m.note)}</div>`:""}<div class="meeting-actions">${m.mode==="Online"&&href?`<a class="map-link" href="${esc(href)}" target="_blank" rel="noopener">${icon("link",14)} Mở link họp</a>`:""}${m.mode!=="Online"&&m.place?`<a class="map-link" href="${esc(directionsUrl(m.place))}" target="_blank" rel="noopener">${icon("pin",14)} Chỉ đường</a><button type="button" class="map-link link-btn" onclick="copyText(this.dataset.q,this)" data-q="${esc(m.place)}">Copy địa chỉ</button>`:""}</div><div class="push-status small"><span class="push-dot ${rem.length?"on":""}"></span>${past?"Đã qua":rem.length?"Nhắc "+rem.map(x=>`trước ${labelMinutes(x.minutes)}`).join(" • "):"Không nhắc"}</div></div>`}).join(""):'<div class="empty">Chưa có lịch họp.</div>'}</section>`})()}
