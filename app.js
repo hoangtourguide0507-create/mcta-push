@@ -1,5 +1,5 @@
 
-const APP_VERSION="V28.5";
+const APP_VERSION="V28.6";
 // V28.0: app chạy trên GitHub Pages; dữ liệu + thông báo nằm trên máy chủ Cloudflare riêng (mcta-push).
 const CLOUD_DEFAULT="https://mcta-push.hoangtourguide0507.workers.dev";
 const KEY="freelance_planner_v12";
@@ -796,6 +796,7 @@ more(){
  <div class="settings-list">
   <div class="setting-card"><div class="setting-icon">${icon("edit",18)}</div><div class="setting-main"><b>Tên ứng dụng</b><span>${esc(state.settings.appName)}</span></div><button class="small-black" onclick="setAppName()">Đổi</button></div>
   <div class="setting-card"><div class="setting-icon">${icon("bell",18)}</div><div class="setting-main"><b>Thông báo</b><span>${(()=>{const st=notifyStatus;if(!st)return "Bật nhắc show, lịch họp, thu tiền trên từng máy";return notifyReady(st)?`Máy này đang nhận ✓ · ${st.devices.length} máy đã bật`:"Máy này chưa nhận — chạm để bật";})()}</span></div><button class="small-black" onclick="navigate('notify')">Mở</button></div>
+  <div class="setting-card"><div class="setting-icon">💌</div><div class="setting-main"><b>Love Story</b><span>Câu trả lời của dâu rể · tạo link mời · đổ vào kịch bản</span></div><button class="small-black" onclick="lsPage()">Mở</button></div>
   <div class="setting-card"><div class="setting-icon">${icon("eye",18)}</div><div class="setting-main"><b>Hiệu ứng chuyển động</b><span>${state.settings.motion===false?"Đang tắt":"Đang bật"} · chuyển trang, nảy nút, số chạy, đóng dấu khi thu đủ tiền · chỉ máy này</span></div><button class="small-black" onclick="toggleMotion()">${state.settings.motion===false?"Bật":"Tắt"}</button></div>
   <div class="setting-card"><div class="setting-icon">${icon("calendar",18)}</div><div class="setting-main"><b>Báo cáo thu nhập</b><span>Theo tháng, booker, loại show · xuất Excel</span></div><button class="small-black" onclick="navigate('report')">Mở</button></div>
   <div class="setting-card"><div class="setting-icon">${icon("check",18)}</div><div class="setting-main"><b>Mã truy cập dữ liệu</b><span>${accessKey()?"Máy này đã nhập mã ✓":"Máy này chưa nhập mã"} · bảo vệ dữ liệu trên máy chủ</span></div><button class="small-black" onclick="askAccessKey(true)">${accessKey()?"Đổi":"Nhập"}</button></div>
@@ -1026,13 +1027,14 @@ function openJob(id){
  <div class="job-script-adds"><button class="outline-btn job-script-add" onclick="openJobAfterNote=true;openNote(null,{jobId:'${j.id}'})">＋ Viết kịch bản</button>${isWedding(j)?`<button class="outline-btn job-script-add" onclick="openJobAfterNote=true;openNote(null,{jobId:'${j.id}',kind:'lovestory'})">＋ Viết Love Story</button>`:""}</div>
  ${(j.scriptLink||j.scriptNotes||j.loveStoryLink||j.loveStoryNotes)?`<details class="legacy-script"><summary>Link / ghi chú nhập trước đây</summary>${j.scriptLink?`<a class="script-link" href="${esc(safeHref(j.scriptLink)||"#")}" target="_blank" rel="noopener">${icon("link",14)} File kịch bản</a>`:""}${j.scriptNotes?`<div class="note-body script-note">${esc(j.scriptNotes)}</div>`:""}${j.loveStoryLink?`<a class="script-link" href="${esc(safeHref(j.loveStoryLink)||"#")}" target="_blank" rel="noopener">${icon("link",14)} File Love Story</a>`:""}${j.loveStoryNotes?`<div class="note-body script-note"><b>Love Story:</b> ${esc(j.loveStoryNotes)}</div>`:""}</details>`:""}
  </div></section>
+ ${isWedding(j)||j.lsCode?`<section class="section compact ls-section"><div class="section-head"><h3>💌 Love Story</h3>${j.lsCode?`<button class="text-btn" onclick="LS.at=0;hydrateLoveStory(state.jobs.find(x=>x.id==='${j.id}'))">Làm mới</button>`:""}</div><div id="lsWrap"></div></section>`:""}
  <section class="section compact"><div class="section-head"><h3>Checklist</h3><button class="text-btn" onclick="addChecklist('${j.id}')">＋ Thêm việc</button></div>${checks||'<div class="empty">Chưa có checklist.</div>'}</section>
  <section class="section compact"><div class="section-head"><h3>Tài chính</h3><button class="finance-eye" onclick="toggleFinance();openJob('${j.id}')">${icon(state.settings.financeVisible?"eye":"morecircle",15)} ${state.settings.financeVisible?"Ẩn":"Hiện"}</button></div><div class="finance-grid"><div><span>Hợp đồng</span><b>${money(j.total)}</b></div><button class="finance-sensitive" onclick="toggleFinance();openJob('${j.id}')"><span>Đã nhận</span><b>${maskedMoney(paid)}</b></button><button class="finance-sensitive" onclick="toggleFinance();openJob('${j.id}')"><span>Còn phải thu</span><b>${maskedMoney(due)}</b></button><div><span>Chiết khấu (back)</span><b>${F.commission?maskedMoney(F.commission):"—"}</b></div>${F.commission?`<div class="fin-net"><span>Thực nhận (sau chiết khấu)</span><b>${maskedMoney(F.net)}</b></div>`:""}</div>
  ${F.total?(F.paidFull?`<div class="paid-state on">✓ Khách đã thanh toán đủ <button class="text-btn" onclick="markPaid('${j.id}',false)">Bỏ đánh dấu</button></div>`:`<button class="black-btn mark-paid" onclick="markPaid('${j.id}',true)">✓ Đánh dấu khách đã thanh toán đủ</button>${!isNotOver(j)?`<button class="outline-btn pay-remind-detail" onclick="openPayMessage('${j.id}')">✉︎ Soạn tin nhắc thanh toán</button>`:""}`):""}</section>
  <section class="section compact"><div class="section-head"><h3>Thông báo</h3><button class="text-btn" onclick="openJobForm(state.jobs.find(x=>x.id==='${j.id}'))">Chỉnh sửa</button></div><div class="push-status"><span class="push-dot ${j.notificationEnabled===false?"":"on"}"></span>${j.notificationEnabled===false?"Tắt":"Bật"} · ${rem.length?rem.map(x=>`Trước ${labelMinutes(x.minutes)}`).join(" • "):"Không có mốc nhắc"}</div></section>
  ${j.notes?`<section class="section compact"><h3>Ghi chú</h3><div class="note-body">${esc(j.notes)}</div></section>`:""}
  <div class="actions end-actions"><button class="outline-btn" onclick="openJobForm(state.jobs.find(x=>x.id==='${j.id}'))">Chỉnh sửa</button><button class="danger-btn" onclick="deleteJob('${j.id}')">Xóa</button></div>`);
- hydrateJobMap(j);
+ hydrateJobMap(j);hydrateLoveStory(j);
 }
 function openMessenger(bookerId){
  const b=state.bookers.find(x=>x.id===bookerId);const raw=(b?.messengerLink||"").trim();
@@ -1524,7 +1526,7 @@ function showInstallHelp(){openModal(`<div class="sheet-head"><div><div class="e
 if("serviceWorker" in navigator){navigator.serviceWorker.addEventListener("message",e=>{const d=e.data||{};
   if(d.type==="push"){showToast(`${d.title}: ${d.body}`.slice(0,120));if(soundSettingEnabled())playNotifySound(d.kind==="job"||d.kind==="meeting"?"urgent":"soft");maybePull(0);}
   if(d.type==="open")openFromUrl(d.url);});}
-function openFromUrl(u){try{const id=new URL(u,location.href).searchParams.get("job");if(id&&state.jobs.some(j=>j.id===id)){closeModal();openJob(id);}}catch(_){}}
+function openFromUrl(u){try{const ls=new URL(u,location.href).searchParams.get("ls");if(ls){closeModal();LS.at=0;lsOpen(ls);return;}const id=new URL(u,location.href).searchParams.get("job");if(id&&state.jobs.some(j=>j.id===id)){closeModal();openJob(id);}}catch(_){}}
 // ---- V23.0: Sao lưu / khôi phục an toàn ----
 const BACKUP_REMIND_DAYS=14;
 function pad2(n){return String(n).padStart(2,"0");}
@@ -1567,7 +1569,7 @@ function undoImport(){
   state=b.state;initializeState(state);save();localStorage.removeItem("mcta_before_import");showToast("Đã hoàn tác ✓");setTimeout(()=>location.reload(),900);
 }
 function changeMonth(n){calendarDate=new Date(calendarDate.getFullYear(),calendarDate.getMonth()+n,1);render()}
-function parseDeepLink(){const q=new URLSearchParams(location.search);const id=q.get("job");if(id&&state?.jobs?.some(j=>j.id===id))setTimeout(()=>openJob(id),350);}
+function parseDeepLink(){const q=new URLSearchParams(location.search);if(q.get("ls")){setTimeout(()=>lsOpen(q.get("ls")),400);return;}const id=q.get("job");if(id&&state?.jobs?.some(j=>j.id===id))setTimeout(()=>openJob(id),350);}
 document.addEventListener("dblclick",e=>{if(e.target.closest&&e.target.closest("[contenteditable],input,textarea"))return;e.preventDefault();},{passive:false});
 async function startApp(){
   bootLocal();takeSnapshot();
@@ -1594,6 +1596,150 @@ async function startApp(){
     },1500);
   },0);
 }
+// ---- V28.6: Love Story — nối với trang love-story-mcthienan (Google Sheet qua Apps Script) ----
+// App gọi thẳng Apps Script bằng mật khẩu quản trị (ADMIN_PASSWORD), lưu riêng trên từng máy.
+const LS_DEFAULT_API="https://script.google.com/macros/s/AKfycbx11b8D22bPFESjQR164Rlsbd-hgSndSGrVam-LOv-RvlxHCD8-hPNLVk2TAjy5vA/exec";
+const LS_DEFAULT_FORM="https://mc-thien-an.netlify.app/lovestory/";
+const LS_QUESTIONS_URL="https://raw.githubusercontent.com/hoangtourguide0507-create/love-story-mcthienan/main/public/lovestory/questions.json";
+const LS_STATUS={"new":"Chưa mở",opened:"Đã mở link",draft:"Đang điền",submitted:"Đã gửi"};
+const LS_ERR={wrong_password:"Sai mật khẩu quản trị Love Story.",locked:"Nhập sai quá nhiều lần — thử lại sau 10 phút.",no_admin_password:"Apps Script chưa đặt ADMIN_PASSWORD.",invalid_date:"Ngày cưới chưa đúng.",missing_names:"Cần tên cô dâu và chú rể.",not_found:"Không tìm thấy cặp đôi này (có thể đã bị xoá)."};
+function lsApi(){return (state.settings.lsApi||LS_DEFAULT_API).trim();}
+function lsForm(){let u=(state.settings.lsForm||LS_DEFAULT_FORM).trim();if(!/\/$/.test(u))u+="/";return u;}
+function lsPw(){try{return localStorage.getItem("mcta_ls_pw")||"";}catch(_){return "";}}
+function lsSetPw(v){try{v?localStorage.setItem("mcta_ls_pw",v):localStorage.removeItem("mcta_ls_pw");}catch(_){}}
+let LS={couples:null,at:0,Q:null,busy:null};
+async function lsCall(action,extra={},askPw=true){
+  let pw=lsPw();
+  if(!pw&&askPw){pw=(prompt("Mật khẩu quản trị Love Story\n(ADMIN_PASSWORD trong Apps Script — chỉ nhập 1 lần trên máy này):")||"").trim();if(!pw)throw new Error("Chưa nhập mật khẩu");}
+  const r=await fetch(lsApi(),{method:"POST",body:JSON.stringify({action,password:pw,...extra}),redirect:"follow"});
+  if(!r.ok)throw new Error("Apps Script lỗi "+r.status);
+  const j=await r.json();
+  if(!j.ok&&j.error==="wrong_password"){lsSetPw("");throw new Error(LS_ERR.wrong_password);}
+  if(!j.ok)throw new Error(LS_ERR[j.error]||("Lỗi: "+j.error));
+  lsSetPw(pw);return j;
+}
+async function lsList(force){if(!force&&LS.couples&&Date.now()-LS.at<60000)return LS.couples;if(LS.busy)return LS.busy;
+  LS.busy=lsCall("adminList").then(j=>{LS.couples=j.couples||[];LS.at=Date.now();return LS.couples;}).finally(()=>{LS.busy=null;});return LS.busy;}
+async function lsQuestions(){if(LS.Q)return LS.Q;
+  try{const r=await fetch(LS_QUESTIONS_URL,{cache:"no-cache"});if(r.ok){LS.Q=await r.json();try{localStorage.setItem("mcta_ls_q",JSON.stringify(LS.Q));}catch(_){}return LS.Q;}}catch(_){}
+  try{LS.Q=JSON.parse(localStorage.getItem("mcta_ls_q")||"null");}catch(_){}
+  if(!LS.Q)throw new Error("Không tải được bộ câu hỏi Love Story");return LS.Q;}
+function lsLink(c){return lsForm()+c.brideKey;}
+function lsMessage(c,lang){const url=lsLink(c)+(lang==="en"?"?lang=en":"");
+  if(lang==="en")return `Hi ${c.brideName} & ${c.groomName} 💛\nThis is Thiên Ân. Here's the link to share your love story, so I can prepare the Love Story moment for your wedding on ${fmtDate(c.weddingDate)}.\n\n👉 ${url}\n\nEach of you, please open the link, tap your own name and answer separately. It takes about 20–25 minutes, and your answers save automatically so you can come back anytime.\nThank you both! — Thiên Ân`;
+  return `Chào ${c.brideName} & ${c.groomName} 💛\nThiên Ân gửi hai bạn link kể câu chuyện tình yêu, để mình chuẩn bị phần Love Story cho đám cưới ngày ${fmtDate(c.weddingDate)}.\n\n👉 ${url}\n\nMỗi bạn mở link, bấm chọn đúng tên mình rồi trả lời riêng nhé, khoảng 20–25 phút mỗi người. Câu trả lời tự lưu nên có thể dừng lại và điền tiếp bất cứ lúc nào.\nCảm ơn hai bạn! — Thiên Ân`;}
+async function lsCopy(text,msg){try{await navigator.clipboard.writeText(text);}catch(_){const t=document.createElement("textarea");t.value=text;document.body.appendChild(t);t.select();try{document.execCommand("copy");}catch(_){}t.remove();}showToast(msg||"Đã copy");}
+function lsChip(role,st){return `<span class="ls-chip st-${esc(st||"new")}">${role==="bride"?"Dâu":"Rể"} · ${esc(LS_STATUS[st]||"Chưa mở")}</span>`;}
+function lsJobFor(code){return state.jobs.find(j=>j.lsCode===code);}
+// Đoán tên dâu rể từ tiêu đề job: "Tiệc cưới Minh Khang & Thảo Vy" → ["Minh Khang","Thảo Vy"]
+function lsGuessNames(j){const t=String(j.title||"").replace(/^(tiệc cưới|lễ cưới|đám cưới|wedding|lễ gia tiên|gia tiên|lễ vu quy|vu quy|lễ thành hôn|thành hôn|tiệc|lễ)\s*[:\-–·]?\s*/i,"");const p=t.split(/\s*(?:&|\+| và | and |\bx\b|❤️|♥)\s*/i).map(s=>s.replace(/\(.*?\)/g,"").trim()).filter(Boolean);return p.length>=2?[p[0],p[1]]:["",""];}
+// ---- thẻ Love Story trong chi tiết job ----
+async function hydrateLoveStory(j){
+  const w=document.getElementById("lsWrap");if(!w)return;
+  if(!lsPw()&&!j.lsCode){w.innerHTML=`<div class="ls-empty"><span class="small">Gửi link cho dâu rể kể chuyện tình yêu, câu trả lời về thẳng app.</span><button class="outline-btn" onclick="lsCreateForJob('${j.id}')">＋ Tạo link Love Story</button></div>`;return;}
+  w.innerHTML=`<div class="small">Đang tải Love Story…</div>`;
+  let list;try{list=await lsList();}catch(e){if(!document.getElementById("lsWrap"))return;w.innerHTML=`<div class="ls-empty"><span class="small">${esc(e.message)}</span><button class="outline-btn" onclick="LS.at=0;hydrateLoveStory(state.jobs.find(x=>x.id==='${j.id}'))">Thử lại</button></div>`;return;}
+  const w2=document.getElementById("lsWrap");if(!w2)return;
+  const c=j.lsCode&&list.find(x=>x.code===j.lsCode);
+  if(!c){
+    const near=list.filter(x=>!lsJobFor(x.code)&&x.weddingDate===j.date);
+    w2.innerHTML=`${j.lsCode?`<div class="small pay-note">Cặp đôi đã gắn không còn trên Google Sheet (có thể đã tự xoá sau 6 tháng).</div>`:""}<div class="ls-empty">${near.map(x=>`<button class="outline-btn" onclick="lsLink2Job('${j.id}','${esc(x.code)}')">Gắn ${esc(x.brideName)} &amp; ${esc(x.groomName)} (${fmtDate(x.weddingDate)})</button>`).join("")}<button class="outline-btn" onclick="lsCreateForJob('${j.id}')">＋ Tạo link Love Story</button>${list.some(x=>!lsJobFor(x.code))?`<button class="text-btn" onclick="lsPickForJob('${j.id}')">Chọn cặp đã có…</button>`:""}</div>`;return;}
+  w2.innerHTML=`<div class="ls-card"><div class="ls-names"><b>${esc(c.brideName)} &amp; ${esc(c.groomName)}</b><span>${lsChip("bride",c.brideStatus)}${lsChip("groom",c.groomStatus)}</span></div>
+   <div class="ls-actions"><button class="outline-btn" onclick="lsCopyMsg('${esc(c.code)}','vi')">Copy tin mời (VI)</button><button class="outline-btn" onclick="lsCopyMsg('${esc(c.code)}','en')">(EN)</button><button class="outline-btn" onclick="lsCopyMsg('${esc(c.code)}','url')">Copy link</button></div>
+   <div class="ls-actions"><button class="black-btn" onclick="lsOpen('${esc(c.code)}')">Xem câu trả lời</button>${c.brideStatus==="submitted"||c.groomStatus==="submitted"||c.brideStatus==="draft"||c.groomStatus==="draft"?`<button class="outline-btn" onclick="lsMakeNote('${esc(c.code)}')">✍️ Tạo kịch bản</button>`:""}</div></div>`;
+}
+function lsCopyMsg(code,kind){const c=(LS.couples||[]).find(x=>x.code===code);if(!c)return;if(kind==="url")lsCopy(lsLink(c),"Đã copy link");else lsCopy(lsMessage(c,kind),"Đã copy tin nhắn — dán vào group của dâu rể");}
+function lsLink2Job(jobId,code){const j=state.jobs.find(x=>x.id===jobId);if(!j)return;state.jobs.forEach(x=>{if(x.lsCode===code&&x.id!==jobId)delete x.lsCode;});j.lsCode=code;save();openJob(jobId);showToast("Đã gắn Love Story vào job ✓");}
+function lsPickForJob(jobId){const free=(LS.couples||[]).filter(x=>!lsJobFor(x.code));if(!free.length)return;
+  openModal(`<div class="sheet-head"><div><div class="eyebrow">LOVE STORY</div><h2>Chọn cặp đôi</h2></div><button class="close" onclick="openJob('${jobId}')">×</button></div><div class="ls-list">${free.map(c=>`<button class="ls-row" onclick="lsLink2Job('${jobId}','${esc(c.code)}')"><b>${esc(c.brideName)} &amp; ${esc(c.groomName)}</b><span>${fmtDate(c.weddingDate)}${c.venue?` · ${esc(c.venue)}`:""}</span></button>`).join("")}</div>`);}
+function lsCreateForJob(jobId){const j=state.jobs.find(x=>x.id===jobId);if(!j)return;const [b,g]=lsGuessNames(j);
+  openModal(`<div class="sheet-head"><div><div class="eyebrow">LOVE STORY</div><h2>Tạo link cho dâu rể</h2></div><button class="close" onclick="openJob('${jobId}')">×</button></div>
+  <form class="form" onsubmit="lsCreateSubmit(event,'${jobId}')">
+   <div class="two"><label class="field"><span>Tên cô dâu *</span><input class="field-control" name="brideName" required maxlength="80" value="${esc(b)}"></label><label class="field"><span>Tên chú rể *</span><input class="field-control" name="groomName" required maxlength="80" value="${esc(g)}"></label></div>
+   <div class="small pay-note">Nhập tên gọi thân mật (vd: Ngọc, Minh) — tên này hiện trong câu hỏi gửi cho người kia. Kiểm tra lại đúng ai là cô dâu.</div>
+   <div class="two"><label class="field"><span>Ngày cưới *</span><input class="field-control" type="date" name="weddingDate" required value="${esc(j.date||"")}"></label><label class="field"><span>Địa điểm</span><input class="field-control" name="venue" maxlength="200" value="${esc(j.locationName||j.location||"")}"></label></div>
+   <label class="field"><span>Ghi chú riêng (chỉ bạn thấy)</span><textarea class="field-control" name="note" maxlength="1000" rows="2"></textarea></label>
+   <div class="small" id="lsMsg"></div><button class="black-btn">Tạo link</button></form>`);}
+async function lsCreateSubmit(e,jobId){e.preventDefault();const f=e.target,btn=f.querySelector("button"),msg=document.getElementById("lsMsg");btn.disabled=true;msg.textContent="Đang tạo…";
+  try{const d=Object.fromEntries(new FormData(f).entries());const r=await lsCall("adminCreate",{couple:d});LS.couples=[...(LS.couples||[]),r.couple];
+    const j=state.jobs.find(x=>x.id===jobId);if(j){j.lsCode=r.couple.code;save();}
+    await lsCopy(lsMessage(r.couple,"vi"),"Đã tạo link ✓ — tin mời (VI) đã được copy, dán vào group");openJob(jobId);}
+  catch(err){msg.textContent=err.message;btn.disabled=false;}}
+// ---- xem câu trả lời ----
+function lsHas(v){return Array.isArray(v)?v.some(x=>String(x||"").trim()):v!=null&&String(v).trim()!=="";}
+function lsMonth(v){const m=/^(\d{4})-(\d{2})$/.exec(v||"");return m?`${m[2]}/${m[1]}`:v;}
+function lsAnswer(q,v){if(!lsHas(v))return null;
+  if(q.type==="single"){const o=(q.options||[]).find(x=>x.value===v);return o?o.vi:String(v);}
+  if(q.type==="multi")return (q.options||[]).filter(x=>(v||[]).includes(x.value)).map(o=>o.vi).join(", ");
+  if(q.type==="list")return v.map((x,i)=>x&&String(x).trim()?`${i+1}. ${String(x).trim()}`:"").filter(Boolean).join("\n");
+  if(q.type==="date")return fmtDate(v);if(q.type==="month")return lsMonth(v);return String(v).trim();}
+function lsVisible(q,a){return !q.showIf||q.showIf.in.includes((a||{})[q.showIf.q]);}
+function lsLabel(q){return String(q.label.vi).replace(/\{partner\}/g,"nửa kia").replace(/\{self\}/g,"");}
+let lsCurrent=null;
+async function lsOpen(code){
+  openModal(`<div class="sheet-head"><div><div class="eyebrow">LOVE STORY</div><h2>Đang tải…</h2></div><button class="close" onclick="closeModal()">×</button></div>`);
+  try{const [Q,d]=await Promise.all([lsQuestions(),lsCall("adminGet",{code})]);lsCurrent=d;
+    const c=d.couple,ba=d.bride?.answers||{},ga=d.groom?.answers||{},job=lsJobFor(code);
+    const meta=s=>!s?"Chưa có câu trả lời":`${LS_STATUS[s.status]||s.status}${s.submittedAt?` · gửi ${new Date(s.submittedAt).toLocaleString("vi-VN",{hour:"2-digit",minute:"2-digit",day:"2-digit",month:"2-digit"})}`:""}${s.lang==="en"?" · tiếng Anh":""}`;
+    const secs=Q.sections.map((sec,i)=>{const rows=sec.questions.filter(q=>lsVisible(q,ba)||lsVisible(q,ga)).map(q=>{const bv=lsVisible(q,ba)?lsAnswer(q,ba[q.id]):null,gv=lsVisible(q,ga)?lsAnswer(q,ga[q.id]):null;if(bv==null&&gv==null)return "";
+      return `<div class="ls-qa${q.private?" private":""}"><p><b>${esc(q.num)}</b> ${esc(lsLabel(q))}${q.private?' <i class="ls-tag">Riêng tư</i>':""}</p><div class="ls-ans"><div><small>Dâu · ${esc(c.brideName)}</small>${bv==null?'<em>—</em>':esc(bv).replace(/\n/g,"<br>")}</div><div><small>Rể · ${esc(c.groomName)}</small>${gv==null?'<em>—</em>':esc(gv).replace(/\n/g,"<br>")}</div></div></div>`;}).join("");
+      return rows?`<h3 class="ls-sec">Phần ${i+1} · ${esc(sec.title.vi)}</h3>${rows}`:"";}).join("");
+    openModal(`<div class="sheet-head"><div><div class="eyebrow">LOVE STORY</div><h2>${esc(c.brideName)} &amp; ${esc(c.groomName)}</h2></div><button class="close" onclick="${job?`openJob('${job.id}')`:"closeModal()"}">×</button></div>
+     <div class="ls-meta"><span>Ngày cưới <b>${fmtDate(c.weddingDate)}</b></span>${c.venue?`<span>${esc(c.venue)}</span>`:""}<span>Tự xoá ${fmtDate(c.purgeDate)}</span></div>
+     <div class="ls-names"><span>${lsChip("bride",c.brideStatus)}${lsChip("groom",c.groomStatus)}</span></div>
+     <div class="small">Dâu: ${esc(meta(d.bride))}<br>Rể: ${esc(meta(d.groom))}</div>
+     <div class="ls-actions"><button class="black-btn" onclick="lsMakeNote('${esc(code)}')">✍️ Tạo kịch bản Love Story</button><button class="outline-btn" onclick="lsCopy(lsAiBrief(),'Đã copy — dán vào Claude để viết kịch bản')">Copy cho AI</button><button class="outline-btn" onclick="lsCopyMsg('${esc(code)}','vi')">Tin mời</button></div>
+     ${secs||'<div class="empty">Chưa có câu trả lời nào.</div>'}`);
+  }catch(e){openModal(`<div class="sheet-head"><div><div class="eyebrow">LOVE STORY</div><h2>Không tải được</h2></div><button class="close" onclick="closeModal()">×</button></div><div class="empty">${esc(e.message)}</div><button class="outline-btn" onclick="lsOpen('${esc(code)}')">Thử lại</button>`);}
+}
+// Bản tổng hợp cho AI (giống nút "Tạo bản cho AI" ở trang quản trị)
+function lsAiBrief(){const d=lsCurrent,Q=LS.Q;if(!d||!Q)return "";const c=d.couple,ba=d.bride?.answers||{},ga=d.groom?.answers||{},B=c.brideName,G=c.groomName;
+  const qs=Object.fromEntries(Q.sections.flatMap(s=>s.questions).map(q=>[q.id,q]));const val=(q,a)=>q&&lsVisible(q,a)?lsAnswer(q,a[q.id]):null;const pair=id=>({b:val(qs[id],ba),g:val(qs[id],ga)});
+  const L=["# YÊU CẦU","Bạn là người viết kịch bản cho MC Thiên Ân, MC đám cưới cao cấp, dẫn song ngữ Việt – Anh.",`Hãy viết phần dẫn **Love Story** cho đám cưới của ${B} & ${G}, dựa trên chia sẻ riêng của cô dâu và chú rể ở bên dưới.`,"",
+   "- Độ dài: khoảng 3–4 phút đọc trên sân khấu.","- Kể theo dòng thời gian: gặp gỡ → hẹn hò → cầu hôn hoặc quyết định về chung nhà → hôm nay → tương lai.","- Đan xen góc nhìn của cả hai. Khi hai người kể khác nhau về cùng một chuyện, dùng chính sự khác biệt đó một cách duyên dáng.","- Không bịa thêm chi tiết không có trong chia sẻ. Chỗ nào thiếu thông tin, ghi [CẦN HỎI THÊM: …]."];
+  const mood=pair("q5_4"),lang=pair("q5_5"),avoid=pair("q5_6");if(mood.b||mood.g)L.push(`- Giọng điệu cặp đôi mong muốn: ${[mood.b,mood.g].filter(Boolean).join("; ")}.`);if(lang.b||lang.g)L.push(`- Ngôn ngữ khách mời: ${lang.b||lang.g}.`);
+  if(avoid.b||avoid.g){L.push("- TUYỆT ĐỐI KHÔNG nhắc tới:");if(avoid.b)L.push("  - Theo cô dâu: "+avoid.b.replace(/\n/g," "));if(avoid.g)L.push("  - Theo chú rể: "+avoid.g.replace(/\n/g," "));}
+  L.push("","# THÔNG TIN CẶP ĐÔI",`- Cô dâu: ${B}`,`- Chú rể: ${G}`,`- Ngày cưới: ${fmtDate(c.weddingDate)}${c.venue?" · "+c.venue:""}`);if(c.note)L.push("- Ghi chú của MC: "+c.note.replace(/\n/g," "));
+  L.push("","# CHIA SẺ CỦA CÔ DÂU VÀ CHÚ RỂ");const skip={q5_4:1,q5_5:1,q5_6:1};
+  Q.sections.forEach(sec=>{const block=[];sec.questions.forEach(q=>{if(skip[q.id])return;const bv=val(q,ba),gv=val(q,ga);if(bv==null&&gv==null)return;block.push("",`### ${lsLabel(q)}${q.private?" [RIÊNG TƯ — chỉ MC đọc]":""}`,`- Cô dâu (${B}): ${bv==null?"(không trả lời)":bv.replace(/\n/g,"\n  ")}`,`- Chú rể (${G}): ${gv==null?"(không trả lời)":gv.replace(/\n/g,"\n  ")}`);});if(block.length)L.push("",`## ${sec.title.vi}`,...block);});
+  return L.join("\n");}
+// Đổ câu trả lời thành một kịch bản (note) loại Love Story, gắn với job — mở lại lần sau thì cập nhật đúng note đó
+async function lsMakeNote(code){
+  try{if(!lsCurrent||lsCurrent.couple.code!==code){const [Q,d]=await Promise.all([lsQuestions(),lsCall("adminGet",{code})]);lsCurrent=d;}
+    const d=lsCurrent,Q=LS.Q,c=d.couple,ba=d.bride?.answers||{},ga=d.groom?.answers||{},job=lsJobFor(code);
+    let h=`<h3>Love Story · ${esc(c.brideName)} &amp; ${esc(c.groomName)}</h3><div>Ngày cưới ${fmtDate(c.weddingDate)}${c.venue?` · ${esc(c.venue)}`:""}</div><div><span style="color:#2563eb">■ Cô dâu ${esc(c.brideName)}</span> · <span style="color:#e5304f">■ Chú rể ${esc(c.groomName)}</span></div><hr>`;
+    Q.sections.forEach((sec,i)=>{let rows="";sec.questions.forEach(q=>{const bv=lsVisible(q,ba)?lsAnswer(q,ba[q.id]):null,gv=lsVisible(q,ga)?lsAnswer(q,ga[q.id]):null;if(bv==null&&gv==null)return;
+      rows+=`<div><b>${esc(q.num)} ${esc(lsLabel(q))}</b>${q.private?' <span style="background-color:#ffd6e7">[riêng tư]</span>':""}</div>${bv!=null?`<div><span style="color:#2563eb">Dâu: ${esc(bv).replace(/\n/g,"<br>")}</span></div>`:""}${gv!=null?`<div><span style="color:#e5304f">Rể: ${esc(gv).replace(/\n/g,"<br>")}</span></div>`:""}<div><br></div>`;});
+      if(rows)h+=`<h3>Phần ${i+1} · ${esc(sec.title.vi)}</h3>${rows}`;});
+    const html=sanitizeHtml(h),now=new Date().toISOString();let n=state.notes.find(x=>x.lsCode===code);
+    if(n&&!confirm(`Đã có “${n.title}”. Cập nhật lại theo câu trả lời mới nhất? (Nội dung cũ trong note này sẽ được thay)`)){closeModal();openNote(n);return;}
+    if(n)Object.assign(n,{html,body:htmlToText(html),updatedAt:now});
+    else{n={id:makeId(),title:`Love Story · ${c.brideName} & ${c.groomName} (câu trả lời)`,html,body:htmlToText(html),kind:"lovestory",jobId:job?.id||"",lsCode:code,createdAt:now,updatedAt:now};state.notes.push(n);}
+    save();closeModal();openNote(n);showToast("Đã đổ câu trả lời vào kịch bản ✓");
+  }catch(e){alert(e.message);}
+}
+// ---- trang Love Story (Khác) ----
+async function lsPage(){
+  openModal(`<div class="sheet-head"><div><div class="eyebrow">LOVE STORY</div><h2>Các cặp đôi</h2></div><button class="close" onclick="closeModal()">×</button></div><div id="lsPageBody" class="small">Đang tải…</div>`);
+  try{const list=await lsList(true),t=todayStr(),body=document.getElementById("lsPageBody");if(!body)return;
+    const row=c=>{const job=lsJobFor(c.code);return `<button class="ls-row" onclick="lsOpen('${esc(c.code)}')"><b>${esc(c.brideName)} &amp; ${esc(c.groomName)}</b><span>${fmtDate(c.weddingDate)}${job?` · ${esc(job.title)}`:" · chưa gắn job"}</span><span>${lsChip("bride",c.brideStatus)}${lsChip("groom",c.groomStatus)}</span></button>`;};
+    const up=list.filter(c=>c.weddingDate>=t),past=list.filter(c=>c.weddingDate<t).reverse();
+    body.className="ls-list";body.innerHTML=(up.length?up.map(row).join(""):'<div class="empty">Chưa có cặp sắp cưới.</div>')+(past.length?`<h3 class="ls-sec">Đã cưới</h3>${past.map(row).join("")}`:"")+lsSettingsHtml();
+  }catch(e){const body=document.getElementById("lsPageBody");if(body)body.innerHTML=`<div class="empty">${esc(e.message)}</div>${lsSettingsHtml()}`;}
+}
+function lsSettingsHtml(){return `<details class="ls-settings"><summary>Cài đặt Love Story</summary>
+  <div class="setting-card"><div class="setting-main"><b>Mật khẩu quản trị</b><span>${lsPw()?"Máy này đã nhập ✓":"Chưa nhập"} · chỉ lưu trên máy này</span></div><button class="small-black" onclick="lsSetPw('');lsPage()">${lsPw()?"Đăng xuất":"Nhập"}</button></div>
+  <div class="setting-card"><div class="setting-main"><b>Thông báo khi dâu rể gửi</b><span>Dán link này vào Apps Script (thuộc tính PUSH_URL) — xem hướng dẫn trong repo Love Story</span></div><button class="small-black" onclick="lsPushUrl()">Copy link</button></div>
+  <div class="setting-card"><div class="setting-main"><b>Link form cho dâu rể</b><span>${esc(lsForm())}</span></div><button class="small-black" onclick="const v=prompt('Link form Love Story (kết thúc bằng /lovestory/):',lsForm());if(v){state.settings.lsForm=v.trim();save();lsPage();}">Đổi</button></div>
+ </details>`;}
+async function lsPushUrl(){
+  try{const base=cloudUrl();if(!base)throw new Error("Chưa kết nối máy chủ Cloudflare");const g=ensureGroup();
+    const r=await fetch(base+"/lstoken",{method:"POST",headers:{"Content-Type":"application/json","x-app-key":accessKey()},body:JSON.stringify({group:g})});const j=await r.json().catch(()=>({}));
+    if(!r.ok||!j.token)throw new Error(j.loi||("Máy chủ trả lỗi "+r.status));
+    await lsCopy(`${base}/lsnotify?g=${encodeURIComponent(g)}&t=${encodeURIComponent(j.token)}`,"Đã copy link — dán vào PUSH_URL trong Apps Script");}
+  catch(e){alert("Chưa lấy được link thông báo: "+e.message);}
+}
+
 // ---- V28.1: Hiệu ứng chuyển động (lấy ý tưởng từ app Giáo Án Địa Ngục) ----
 // Chỉ chạy khi chuyển trang / bấm nút — các lần vẽ lại do đồng bộ thì không giật lại. Tắt được ở Khác, và tự tắt
 // khi máy bật "Giảm chuyển động" (Cài đặt → Trợ năng).

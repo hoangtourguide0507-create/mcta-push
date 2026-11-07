@@ -17,6 +17,8 @@
  *   POST /devices { group }                         danh sách máy của nhóm
  *   POST /test    { sub }                           gửi thử ngay tới đúng máy đó
  *   GET  /resolve?u=…                             mở link rút gọn Google Maps (maps.app.goo.gl) → link đầy đủ
+ *   POST /lstoken {group}  (header x-app-key)      lấy/tạo mã bí mật để Apps Script Love Story báo tin
+ *   POST /lsnotify?g=…&t=…  {title, body, code}    Apps Script gọi khi dâu rể bấm Gửi → đẩy thông báo tới cả nhóm
  *   GET  /status                                  → { setup, hasState }
  *   POST /setup   { key, from }                     đặt mã truy cập lần đầu (hoặc kiểm tra mã);
  *                                                   from = địa chỉ app Netlify cũ để chép dữ liệu sang
@@ -204,6 +206,33 @@ export class Hub {
     return json({ error: 'Method not allowed' }, 405);
   }
 
+  // ---- Love Story: Apps Script báo khi dâu rể gửi câu trả lời ----
+  async loveStory(req, p, u) {
+    if (req.method !== 'POST') return json({ ok: false }, 405);
+    if (p === '/lstoken') {
+      const ok = await this.keyOk(req.headers.get('x-app-key'));
+      if (!ok) return json({ ok: false, loi: ok === null ? 'Máy chủ chưa đặt mã truy cập' : 'Sai mã truy cập' }, 401);
+      const q = await req.json().catch(() => ({}));
+      if (!okGroup(q.group)) return json({ ok: false, loi: 'Nhóm không hợp lệ' }, 400);
+      let t = await this.st.get('lstoken:' + q.group);
+      if (!t || q.rotate) { t = b64u(crypto.getRandomValues(new Uint8Array(18))); await this.st.put('lstoken:' + q.group, t); }
+      return json({ ok: true, token: t });
+    }
+    const g = u.searchParams.get('g') || '', t = u.searchParams.get('t') || '';
+    const want = okGroup(g) ? await this.st.get('lstoken:' + g) : null;
+    if (!want || t !== want) return json({ ok: false, loi: 'Sai mã' }, 403);
+    // giới hạn 40 lần / giờ cho mỗi nhóm, phòng lỗi lặp
+    const hour = Math.floor(Date.now() / 3600e3), rk = 'lsrate:' + g, rate = (await this.st.get(rk)) || {};
+    if (rate.h === hour && rate.n >= 40) return json({ ok: false, loi: 'Quá nhiều' }, 429);
+    await this.st.put(rk, { h: hour, n: rate.h === hour ? rate.n + 1 : 1 });
+    const q = await req.json().catch(() => ({}));
+    const code = clip(q.code, 80).replace(/[^A-Za-z0-9_-]/g, '');
+    const item = { title: clip(q.title || '💌 Love Story mới', 80), body: clip(q.body, 240), tag: 'ls-' + code, url: code ? './?ls=' + code : './', kind: 'lovestory' };
+    let sent = 0;
+    for (const rec of await this.subsOf(g)) { try { if (await this.send(rec.sub, payloadOf(item), 6 * 3600) === 'ok') sent++; } catch (_) {} }
+    return json({ ok: true, sent });
+  }
+
   async subsOf(group) { const S = await this.st.list({ prefix: 'sub:' }); return [...S.values()].filter(r => r.group === group); }
 
   async arm() {
@@ -236,6 +265,7 @@ export class Hub {
     try {
       if (p === '/vapid') return json({ publicKey: (await this.vapid()).pub });
       if (p === '/state' || p === '/setup' || p === '/status') return await this.data(req, p);
+      if (p === '/lstoken' || p === '/lsnotify') return await this.loveStory(req, p, u);
       if (!['/plan', '/devices', '/sub', '/unsub', '/test'].includes(p)) return json({ ok: false, loi: 'Không có đường dẫn này' }, 404);
       if (req.method !== 'POST') return json({ ok: false, loi: 'Sai phương thức' }, 405);
       const q = await req.json().catch(() => ({}));
