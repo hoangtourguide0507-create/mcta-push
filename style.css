@@ -1023,3 +1023,4 @@ button{color:inherit}
 :root[data-theme="stage"] .ls-chip.st-draft{background:rgba(242,199,107,.12);color:var(--gold)}
 :root[data-theme="stage"] .ls-chip.st-opened{background:var(--blue-soft);color:var(--blue)}
 :root[data-theme="stage"] .ls-qa.private p{color:var(--gold)}
+.ls-link-job{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:8px 0;padding:10px;border:1px dashed var(--line);border-radius:14px}.ls-link-job .small{flex-basis:100%}
