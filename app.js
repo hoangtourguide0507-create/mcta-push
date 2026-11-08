@@ -1,5 +1,5 @@
 
-const APP_VERSION="V28.7";
+const APP_VERSION="V28.8";
 // V28.0: app chạy trên GitHub Pages; dữ liệu + thông báo nằm trên máy chủ Cloudflare riêng (mcta-push).
 const CLOUD_DEFAULT="https://mcta-push.hoangtourguide0507.workers.dev";
 const KEY="freelance_planner_v12";
@@ -1102,7 +1102,60 @@ function rteColor(color){rteCmd("foreColor",color);}
 function rteUpper(){const sel=getSelection();if(!rteSelInside()||sel.isCollapsed){showToast("Bôi đen chữ cần IN HOA trước");return;}const t=sel.toString();const up=t.toUpperCase();rteCmd("insertText",up===t?t.toLowerCase():up);}
 function rteCue(){if(!rteSelInside())rteEl().focus();rteCmd("insertHTML",'<span style="color:#e5304f;font-weight:bold">[CUE: ]</span>&nbsp;');}
 function rteClear(){rteCmd("removeFormat");rteCmd("formatBlock","DIV");}
-function rtePaste(e){e.preventDefault();const t=(e.clipboardData||window.clipboardData).getData("text/plain");rteCmd("insertText",t);}
+// ---- V28.8: dán giữ định dạng (đậm, nghiêng, gạch chân, gạch ngang, tiêu đề, gạch đầu dòng) ----
+// Nguồn có HTML (Google Docs, Word, Pages, Ghi chú, web): đổi kiểu chữ về thẻ gọn, bỏ font/cỡ chữ/màu đen mặc định.
+// Nguồn chỉ có chữ (nút Copy của Claude/ChatGPT → Markdown): **đậm**, *nghiêng*, ~~gạch~~, # tiêu đề, - gạch đầu dòng.
+function rtePaste(e){
+  e.preventDefault();const cd=e.clipboardData||window.clipboardData;if(!cd)return;
+  const html=cd.getData("text/html"),text=cd.getData("text/plain");
+  let out="";
+  if(html&&/<[a-z]/i.test(html))out=pasteCleanHtml(html);
+  if(!out.replace(/<[^>]+>/g,"").trim()&&text)out=looksMarkdown(text)?mdToHtml(text):"";
+  if(out)rteCmd("insertHTML",sanitizeHtml(out));else rteCmd("insertText",text||"");
+}
+function pasteCleanHtml(html){
+  const doc=new DOMParser().parseFromString(html,"text/html"),body=doc.body;
+  body.querySelectorAll("style,script,meta,link,title,img,svg,video,iframe,object,o\\:p").forEach(n=>n.remove());
+  const isDefaultColor=c=>{c=String(c||"").trim().toLowerCase().replace(/\s+/g,"");if(!c||/^(inherit|initial|currentcolor|windowtext|auto|black|white|transparent)$/.test(c))return true;
+    let r,g,b,m;if((m=c.match(/^#([0-9a-f]{3})$/)))[r,g,b]=[...m[1]].map(x=>parseInt(x+x,16));else if((m=c.match(/^#([0-9a-f]{6})/)))[r,g,b]=[0,2,4].map(i=>parseInt(m[1].slice(i,i+2),16));
+    else if((m=c.match(/^rgba?\((\d+),(\d+),(\d+)(?:,([\d.]+))?\)/))){if(m[4]!=null&&Number(m[4])===0)return true;[r,g,b]=[m[1],m[2],m[3]].map(Number);}else return false;
+    return Math.max(r,g,b)-Math.min(r,g,b)<24;};  // đen / trắng / xám → bỏ để chữ theo giao diện
+  const wrap=(n,tag)=>{const w=doc.createElement(tag);n.parentNode.insertBefore(w,n);w.appendChild(n);return w;};
+  [...body.querySelectorAll("*")].reverse().forEach(n=>{
+    const tag=n.tagName,st=(n.getAttribute("style")||"").toLowerCase(),fw=(st.match(/font-weight\s*:\s*([a-z0-9]+)/)||[])[1];
+    // Google Docs bọc cả đoạn trong <b style="font-weight:normal"> → bỏ đậm giả
+    if((tag==="B"||tag==="STRONG")&&fw&&(fw==="normal"||Number(fw)<600)){n.replaceWith(...n.childNodes);return;}
+    if(/^H[1-6]$/.test(tag)){const h=doc.createElement("h3");h.append(...n.childNodes);n.replaceWith(h);return;}
+    if(tag==="TR"||tag==="BLOCKQUOTE"||tag==="SECTION"||tag==="ARTICLE"||tag==="HEADER"||tag==="FOOTER"||tag==="PRE"){const d=doc.createElement("div");d.append(...n.childNodes);n.replaceWith(d);return;}
+    if(tag==="TD"||tag==="TH"){n.append(doc.createTextNode("   "));}
+    if(tag==="SPAN"||tag==="FONT"||tag==="A"||tag==="P"||tag==="DIV"||tag==="LI"){
+      const bold=fw&&(fw==="bold"||fw==="bolder"||Number(fw)>=600),ital=/font-style\s*:\s*italic/.test(st),und=/text-decoration[^;]*underline/.test(st),strike=/text-decoration[^;]*line-through/.test(st);
+      const col=(st.match(/(?:^|;)\s*color\s*:\s*([^;]+)/)||[])[1]||(tag==="FONT"?n.getAttribute("color"):""),bg=(st.match(/background(?:-color)?\s*:\s*([^;]+)/)||[])[1];
+      const al=(st.match(/text-align\s*:\s*(center|right)/)||[])[1];
+      const keepCss=[];if(col&&!isDefaultColor(col))keepCss.push("color:"+col.trim());if(bg&&!isDefaultColor(bg)&&!/url\(/.test(bg))keepCss.push("background-color:"+bg.trim());
+      const block=tag==="P"||tag==="DIV"||tag==="LI";
+      [...n.attributes].forEach(a=>n.removeAttribute(a.name));
+      if(block&&al)n.setAttribute("style","text-align:"+al);
+      // định dạng chữ đặt vào thẻ con bên trong khối (để không làm mất khối)
+      let inner=n;const kids=()=>{if(inner===n&&block){const sp=doc.createElement("span");sp.append(...n.childNodes);n.appendChild(sp);inner=sp;}};
+      if(keepCss.length){kids();if(inner===n&&!block)n.setAttribute("style",keepCss.join(";"));else inner.setAttribute("style",keepCss.join(";"));}
+      for(const [on,t] of [[bold,"b"],[ital,"i"],[und,"u"],[strike,"s"]]){if(!on)continue;const w=doc.createElement(t);if(block){kids();inner.parentNode.insertBefore(w,inner);w.appendChild(inner);}else{n.parentNode.insertBefore(w,n);w.appendChild(n);}}
+      if(tag==="P"){const d=doc.createElement("div");d.append(...n.childNodes);if(n.getAttribute("style"))d.setAttribute("style",n.getAttribute("style"));if(!d.textContent.trim()&&!d.querySelector("br"))d.appendChild(doc.createElement("br"));n.replaceWith(d);}
+      if(tag==="A"||((tag==="SPAN"||tag==="FONT")&&!n.getAttribute("style")))n.replaceWith(...n.childNodes);
+    }
+  });
+  return body.innerHTML.replace(/<!--[\s\S]*?-->/g,"").replace(/ /g," ").trim();
+}
+function looksMarkdown(t){return /\*\*[^*\n]+\*\*|__[^_\n]+__|~~[^~\n]+~~|^\s{0,3}#{1,6}\s+\S|^\s*[-*•]\s+\S|^\s*\d+[.)]\s+\S/m.test(t)&&(/\*\*|__|~~|^\s{0,3}#{1,6}\s/m.test(t)||t.split("\n").filter(l=>/^\s*([-*•]|\d+[.)])\s+/.test(l)).length>=2);}
+function mdInline(s){return esc(s).replace(/\*\*\*(.+?)\*\*\*/g,"<b><i>$1</i></b>").replace(/\*\*(.+?)\*\*/g,"<b>$1</b>").replace(/__(.+?)__/g,"<b>$1</b>").replace(/~~(.+?)~~/g,"<s>$1</s>").replace(/(^|[^*\w])\*(?!\s)([^*\n]+?)\*(?!\w)/g,"$1<i>$2</i>").replace(/(^|[^_\w])_(?!\s)([^_\n]+?)_(?!\w)/g,"$1<i>$2</i>");}
+function mdToHtml(t){const out=[];let list=null;const close=()=>{if(list){out.push(`</${list}>`);list=null;}};
+  for(const raw of String(t).replace(/\r/g,"").split("\n")){const l=raw.replace(/\s+$/,"");let m;
+    if((m=l.match(/^\s{0,3}#{1,6}\s+(.*)$/))){close();out.push(`<h3>${mdInline(m[1].replace(/\s*#+$/,""))}</h3>`);continue;}
+    if(/^\s*([-*_]\s*){3,}$/.test(l)){close();out.push("<hr>");continue;}
+    if((m=l.match(/^\s*[-*•]\s+(.*)$/))){if(list!=="ul"){close();out.push("<ul>");list="ul";}out.push(`<li>${mdInline(m[1])}</li>`);continue;}
+    if((m=l.match(/^\s*\d+[.)]\s+(.*)$/))){if(list!=="ol"){close();out.push("<ol>");list="ol";}out.push(`<li>${mdInline(m[1])}</li>`);continue;}
+    close();out.push(l.trim()?`<div>${mdInline(l.replace(/^>\s?/,""))}</div>`:"<div><br></div>");}
+  close();return out.join("");}
 document.addEventListener("keydown",e=>{if(!rteEl()||!document.activeElement||document.activeElement!==rteEl())return;const k=e.key.toLowerCase();if((e.metaKey||e.ctrlKey)&&k==="z"){e.preventDefault();e.shiftKey?rteRedo():rteUndo();}else if((e.metaKey||e.ctrlKey)&&k==="y"){e.preventDefault();rteRedo();}});
 function openNote(existing=null,opts={}){
   let n=existing||{id:"",title:"",body:"",jobId:opts.jobId||"",kind:opts.kind||"script"};const p=readerPrefs();noteDirty=false;
