@@ -1,5 +1,5 @@
 
-const APP_VERSION="V28.9";
+const APP_VERSION="V28.10";
 // V28.0: app chạy trên GitHub Pages; dữ liệu + thông báo nằm trên máy chủ Cloudflare riêng (mcta-push).
 const CLOUD_DEFAULT="https://mcta-push.hoangtourguide0507.workers.dev";
 const KEY="freelance_planner_v12";
@@ -303,7 +303,7 @@ function bookerDupGroups(){
   Object.values(byName).forEach(ix=>{if(ix.length<2)return;const phones=new Set(ix.map(i=>bkPhone(L[i].phone)).filter(Boolean));if(phones.size<=1)ix.slice(1).forEach(i=>uni(i,ix[0]));});
   const g={};L.forEach((b,i)=>{(g[find(i)]=g[find(i)]||[]).push(b);});
   const score=b=>state.jobs.filter(j=>j.bookerId===b.id).length*10+["phone","zalo","messengerLink","email","company","notes"].filter(k=>String(b[k]||"").trim()).length;
-  return Object.values(g).filter(x=>x.length>1).map(x=>x.sort((a,b)=>score(b)-score(a)));
+  return Object.values(g).filter(x=>x.length>1).map(x=>x.sort((a,b)=>score(b)-score(a)||String(a.id).localeCompare(String(b.id))));
 }
 function mergeBookers(keepId,ids){
   const keep=state.bookers.find(b=>b.id===keepId);if(!keep)return 0;let n=0;
@@ -314,6 +314,23 @@ function mergeBookers(keepId,ids){
     state.bookers=state.bookers.filter(b=>b.id!==id);n++;});
   return n;
 }
+// Dọn một lần (đồng bộ cho mọi máy): sau khi lấy dữ liệu mới nhất từ máy chủ, tự gộp các booker trùng chắc chắn.
+// Lưu bản sao để Hoàn tác trong 14 ngày ở trang Booker.
+const BK_UNDO="mcta_bk_undo";
+function autoDedupeBookers(){
+  if(localMode&&!browserTestMode)return;if(state.settings.bkDedupV>=1)return;
+  const groups=bookerDupGroups();state.settings.bkDedupV=1;
+  if(!groups.length){save();return;}
+  const removed=[],moved=[];
+  groups.forEach(g=>{const keep=g[0].id;g.slice(1).forEach(b=>{removed.push(JSON.parse(JSON.stringify(b)));state.jobs.forEach(j=>{if(j.bookerId===b.id)moved.push({id:j.id,bookerId:b.id,client:j.client});});});mergeBookers(keep,g.map(b=>b.id));});
+  try{localStorage.setItem(BK_UNDO,JSON.stringify({at:Date.now(),removed,moved}));}catch(_){}
+  save();render();showToast(`Đã tự gộp ${removed.length} booker trùng ✓ — hoàn tác ở trang Booker`);
+}
+function bkUndoInfo(){try{const u=JSON.parse(localStorage.getItem(BK_UNDO)||"null");return u&&Date.now()-u.at<14*86400000?u:null;}catch(_){return null;}}
+function undoBookerDedupe(){const u=bkUndoInfo();if(!u)return;if(!confirm(`Hoàn tác: khôi phục ${u.removed.length} booker đã gộp và trả các job về booker cũ?`))return;
+  u.removed.forEach(b=>{if(!state.bookers.some(x=>x.id===b.id)){delete b._u;state.bookers.push(b);}});
+  u.moved.forEach(m=>{const j=state.jobs.find(x=>x.id===m.id);if(j){j.bookerId=m.bookerId;j.client=m.client;}});
+  try{localStorage.removeItem(BK_UNDO);}catch(_){}save();render();showToast("Đã hoàn tác gộp booker");}
 function openBookerDups(){
   const groups=bookerDupGroups();
   if(!groups.length){showToast("Không còn booker trùng ✓");closeModal();render();return;}
@@ -744,6 +761,7 @@ bookers(){
  arr.sort((a,b)=>a.name.localeCompare(b.name,"vi"));
  return `<div class="section-head"><div><div class="eyebrow">CONTACTS</div><h2>Booker</h2></div><button class="black-btn" onclick="openBookerForm()">${icon("plus",15)} Booker mới</button></div>
  <div class="search-wrap"><span>${icon("search",17)}</span><input class="search" value="${esc(bookerSearch)}" placeholder="Tìm booker..." oninput="bookerSearch=this.value;render()"></div>
+ ${bkUndoInfo()?`<button class="dup-banner undo" onclick="undoBookerDedupe()"><b>Đã tự gộp ${bkUndoInfo().removed.length} booker trùng</b><span>Hoàn tác</span></button>`:""}
  ${(()=>{const g=bookerDupGroups();return g.length?`<button class="dup-banner" onclick="openBookerDups()"><b>${g.reduce((s,x)=>s+x.length-1,0)} booker bị trùng</b><span>Xem & gộp ›</span></button>`:"";})()}
  <div class="booker-list">${arr.map(bookerRow).join("")||'<div class="empty">Chưa có booker.</div>'}</div>`;
 },
@@ -1435,7 +1453,7 @@ async function syncCloud(){
   try{
     const res=await api("/api/state",{method:"PUT",body:JSON.stringify(state)});backendReady=true;pendingPush=false;
     if(res&&res.state){adoptState(res.state);lastRemoteAt=res.state.updatedAt||"";}
-    localStorage.setItem("mcta_sync_v2","1");schedulePlan();
+    localStorage.setItem("mcta_sync_v2","1");afterCloudSync();
   }catch(e){backendReady=false;}
 }
 async function loadCloud(backgroundOnly=false){
@@ -1445,17 +1463,17 @@ async function loadCloud(backgroundOnly=false){
   const timer=setTimeout(()=>controller.abort(),6000);
   try{
     const remote=await api("/api/state"+(lastRemoteAt&&localStorage.getItem("mcta_sync_v2")?`?since=${encodeURIComponent(lastRemoteAt)}`:""),{signal:controller.signal});backendReady=true;lastPull=Date.now();
-    if(remote&&remote.unchanged){if(pendingPush)await syncCloud();else schedulePlan();return true;}
+    if(remote&&remote.unchanged){if(pendingPush)await syncCloud();else afterCloudSync();return true;}
     if(!remote||!remote.state)return false;
     lastRemoteAt=remote.state.updatedAt||"";
     if(!localStorage.getItem("mcta_sync_v2")){
       // Lần đầu chạy bản đồng bộ mới: lấy dữ liệu trên cloud làm chuẩn.
-      adoptState(remote.state);localStorage.setItem("mcta_sync_v2","1");schedulePlan();return true;
+      adoptState(remote.state);localStorage.setItem("mcta_sync_v2","1");afterCloudSync();return true;
     }
     const merged=mergeStates(state,remote.state);
     const needPush=syncView(merged)!==syncView(remote.state);
     adoptState(merged);
-    if(needPush)await syncCloud();else schedulePlan();
+    if(needPush)await syncCloud();else afterCloudSync();
     return true;
   }catch(e){backendReady=false;return false;} finally {clearTimeout(timer);pullBusy=false;}
 }
@@ -1515,6 +1533,7 @@ function buildPlan(st,now){
 function strHash(s){let h=5381;for(let i=0;i<s.length;i++)h=(h*33+s.charCodeAt(i))|0;return (h>>>0).toString(36)+":"+s.length;}
 let planTimer=null,planBusy=false;
 // Gọi sau mỗi lần đồng bộ thành công (dữ liệu đã khớp cloud) để mọi máy cùng giữ lịch nhắc mới nhất.
+function afterCloudSync(){schedulePlan();setTimeout(autoDedupeBookers,800);}
 function schedulePlan(delay=1200){if(localMode||!pushServer()||!pushGroup())return;clearTimeout(planTimer);planTimer=setTimeout(async()=>{await joinIfNeeded();uploadPlan(false);},delay);}
 // Máy đã cho phép thông báo nhưng chưa đăng ký với máy chủ/nhóm hiện tại (vd. vừa nhận địa chỉ máy chủ qua đồng bộ) → tự đăng ký.
 async function joinIfNeeded(){try{if(!pushSupported()||Notification.permission!=="granted"||pushMeta().enabled===false||(isIOS()&&!isStandalone()))return;if(pushMeta().postedTo===pushServer()+"|"+pushGroup())return;await ensureSubscribed(false);if(page==="notify"){await checkNotify();render();}}catch(_){}}

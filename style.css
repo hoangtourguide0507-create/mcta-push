@@ -1036,3 +1036,4 @@ button{color:inherit}
 :root[data-theme="stage"] .dup-banner{background:rgba(255,125,142,.08);border-color:rgba(255,125,142,.3)}
 :root[data-theme="stage"] .dup-banner b,:root[data-theme="stage"] .dup-banner span{color:var(--coral)}
 :root[data-theme="stage"] .dup-group{background:linear-gradient(180deg,#191923,#14141c);border-color:rgba(255,255,255,.07)}
+.dup-banner.undo{border-color:var(--line);background:var(--soft,#f3f4f8)}.dup-banner.undo b{color:var(--ink)}.dup-banner.undo span{color:var(--muted)}
