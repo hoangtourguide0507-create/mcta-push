@@ -1024,3 +1024,15 @@ button{color:inherit}
 :root[data-theme="stage"] .ls-chip.st-opened{background:var(--blue-soft);color:var(--blue)}
 :root[data-theme="stage"] .ls-qa.private p{color:var(--gold)}
 .ls-link-job{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:8px 0;padding:10px;border:1px dashed var(--line);border-radius:14px}.ls-link-job .small{flex-basis:100%}
+/* V28.9 · booker trùng */
+.dup-banner{display:flex;justify-content:space-between;align-items:center;width:100%;margin:0 0 12px;padding:12px 14px;border-radius:16px;border:1px solid rgba(229,48,79,.25);background:rgba(229,48,79,.07);color:var(--ink);font:inherit;text-align:left}
+.dup-banner b{color:#d12c48}.dup-banner span{font-weight:800;font-size:13px;color:#d12c48}
+.dup-all{width:100%;margin:6px 0 12px}
+.dup-group{border:1px solid var(--line);border-radius:16px;padding:8px 10px;margin-bottom:10px;display:flex;flex-direction:column;gap:4px;background:var(--paper,#fff)}
+.dup-row{display:flex;gap:10px;align-items:center;padding:6px 2px}
+.dup-row span{display:flex;flex-direction:column}.dup-row small{color:var(--muted);font-size:12px}
+.dup-row input{accent-color:var(--purple);width:18px;height:18px}
+.dup-group .outline-btn{align-self:flex-start;margin-top:4px}
+:root[data-theme="stage"] .dup-banner{background:rgba(255,125,142,.08);border-color:rgba(255,125,142,.3)}
+:root[data-theme="stage"] .dup-banner b,:root[data-theme="stage"] .dup-banner span{color:var(--coral)}
+:root[data-theme="stage"] .dup-group{background:linear-gradient(180deg,#191923,#14141c);border-color:rgba(255,255,255,.07)}

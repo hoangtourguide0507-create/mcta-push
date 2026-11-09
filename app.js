@@ -1,5 +1,5 @@
 
-const APP_VERSION="V28.8";
+const APP_VERSION="V28.9";
 // V28.0: app chạy trên GitHub Pages; dữ liệu + thông báo nằm trên máy chủ Cloudflare riêng (mcta-push).
 const CLOUD_DEFAULT="https://mcta-push.hoangtourguide0507.workers.dev";
 const KEY="freelance_planner_v12";
@@ -272,22 +272,60 @@ function loveStoryNeedsWork(j){if(!isWedding(j)||j.noLoveStory)return false;if(j
 function workNeedsAttention(j){return scriptNeedsWork(j)||loveStoryNeedsWork(j);}
 function workChips(j){const t=workNeedText(j);return t?`<span class="work-chip work-warn">${esc(t)}</span>`:"";}
 function workLabel(j){if(scriptNeedsWork(j)&&loveStoryNeedsWork(j))return "Chưa có kịch bản + Love Story";if(scriptNeedsWork(j))return "Chưa có kịch bản";if(loveStoryNeedsWork(j))return "Chưa có Love Story";return "Đã đủ";}
+// V28.9: trước đây mỗi lần mở app / đồng bộ, job trỏ tới booker không còn (đã xoá, hoặc chưa kịp đồng bộ) lại sinh
+// một booker MỚI với mã ngẫu nhiên — mỗi máy sinh một bản → booker trùng nhân lên. Giờ: tìm booker có sẵn theo SĐT/tên;
+// nếu phải tạo thì dùng mã cố định theo tên+SĐT (mọi máy ra cùng một mã), và không tạo lại booker bạn đã xoá.
+function bkNorm(s){return String(s||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/đ/gi,"d").toLowerCase().replace(/[^a-z0-9]+/g," ").trim();}
+function bkPhone(s){const d=String(s||"").replace(/\D/g,"");return d.length>=8?d.slice(-9):"";}
+function bkFind(name,phone,list){const n=bkNorm(name),ph=bkPhone(phone);list=list||state.bookers||[];
+  return (ph&&list.find(b=>bkPhone(b.phone)===ph||bkPhone(b.zalo)===ph))||(n&&list.find(b=>bkNorm(b.name)===n&&(!ph||!bkPhone(b.phone))))||null;}
+function bkId(name,phone){const k=bkNorm(name)+"|"+bkPhone(phone);let h=2166136261;for(let i=0;i<k.length;i++){h^=k.charCodeAt(i);h=Math.imul(h,16777619);}return "bk_"+(h>>>0).toString(36);}
 function migrateBookers(){
-  const map=new Map();
-  const existing=Array.isArray(state.bookers)?state.bookers:[];
-  existing.forEach(b=>map.set((b.name||"").trim().toLowerCase()+"|"+(b.phone||"").replace(/\D/g,""),b));
+  const existing=Array.isArray(state.bookers)?state.bookers:[];const gone=(state.deleted&&state.deleted.bookers)||{};
   state.jobs.forEach(j=>{
-    if(j.bookerId && existing.find(b=>b.id===j.bookerId)) return;
-    const name=(j.client||"").trim()||"Chưa rõ";
-    const phone=(j.phone||"").trim();
-    const key=name.toLowerCase()+"|"+phone.replace(/\D/g,"");
-    let b=map.get(key);
-    if(!b){b={id:makeId(),name,phone,messengerLink:j.messengerLink||"",zalo:phone,email:"",company:"",notes:"",createdAt:new Date().toISOString()};existing.push(b);map.set(key,b);}
-    if(!j.bookerId)j.bookerId=b.id;
+    if(j.bookerId&&existing.some(b=>b.id===j.bookerId))return;
+    const name=(j.client||"").trim(),phone=(j.phone||"").trim();
+    if(!name||/^chưa rõ$/i.test(name)){if(j.bookerId&&!existing.some(b=>b.id===j.bookerId))j.bookerId="";return;}
+    let b=bkFind(name,phone,existing);
+    if(!b){const id=bkId(name,phone);if(gone[id]){j.bookerId="";return;}
+      b={id,name,phone,messengerLink:j.messengerLink||"",zalo:phone,email:"",company:"",notes:"",createdAt:new Date().toISOString()};existing.push(b);}
+    j.bookerId=b.id;
   });
   state.bookers=existing;
   state.jobs.forEach(j=>{const b=getBooker(j);if(b){j.client=b.name;j.phone=b.phone||j.phone||"";}});
 }
+// ---- Tìm & gộp booker trùng ----
+function bookerDupGroups(){
+  const L=state.bookers||[],parent=L.map((_,i)=>i),find=i=>parent[i]===i?i:(parent[i]=find(parent[i])),uni=(a,b)=>{parent[find(a)]=find(b);};
+  const byPhone={},byName={};
+  L.forEach((b,i)=>{[bkPhone(b.phone),bkPhone(b.zalo)].filter(Boolean).forEach(p=>{if(byPhone[p]!=null)uni(i,byPhone[p]);else byPhone[p]=i;});const n=bkNorm(b.name);if(n)(byName[n]=byName[n]||[]).push(i);});
+  // Cùng tên: gộp khi trong nhóm chỉ có tối đa 1 số điện thoại khác nhau (khác SĐT thì có thể là 2 người trùng tên)
+  Object.values(byName).forEach(ix=>{if(ix.length<2)return;const phones=new Set(ix.map(i=>bkPhone(L[i].phone)).filter(Boolean));if(phones.size<=1)ix.slice(1).forEach(i=>uni(i,ix[0]));});
+  const g={};L.forEach((b,i)=>{(g[find(i)]=g[find(i)]||[]).push(b);});
+  const score=b=>state.jobs.filter(j=>j.bookerId===b.id).length*10+["phone","zalo","messengerLink","email","company","notes"].filter(k=>String(b[k]||"").trim()).length;
+  return Object.values(g).filter(x=>x.length>1).map(x=>x.sort((a,b)=>score(b)-score(a)));
+}
+function mergeBookers(keepId,ids){
+  const keep=state.bookers.find(b=>b.id===keepId);if(!keep)return 0;let n=0;
+  ids.filter(id=>id!==keepId).forEach(id=>{const o=state.bookers.find(b=>b.id===id);if(!o)return;
+    ["phone","zalo","messengerLink","email","company"].forEach(k=>{if(!String(keep[k]||"").trim()&&String(o[k]||"").trim())keep[k]=o[k];});
+    if(String(o.notes||"").trim()&&!String(keep.notes||"").includes(o.notes.trim()))keep.notes=[keep.notes,o.notes].filter(x=>String(x||"").trim()).join("\n");
+    state.jobs.forEach(j=>{if(j.bookerId===id){j.bookerId=keepId;j.client=keep.name;}});
+    state.bookers=state.bookers.filter(b=>b.id!==id);n++;});
+  return n;
+}
+function openBookerDups(){
+  const groups=bookerDupGroups();
+  if(!groups.length){showToast("Không còn booker trùng ✓");closeModal();render();return;}
+  const jobsOf=b=>state.jobs.filter(j=>j.bookerId===b.id).length;
+  openModal(`<div class="sheet-head"><div><div class="eyebrow">BOOKER TRÙNG</div><h2>${groups.length} nhóm cần gộp</h2></div><button class="close" onclick="closeModal();render()">×</button></div>
+   <div class="small pay-note">Cùng số điện thoại, hoặc cùng tên mà không có số khác nhau. Chọn bản muốn giữ — các job của bản còn lại chuyển sang bản giữ, thông tin còn thiếu được bổ sung.</div>
+   <button class="black-btn dup-all" onclick="mergeAllDups()">Gộp tất cả ${groups.length} nhóm (giữ bản đầu mỗi nhóm)</button>
+   ${groups.map((g,gi)=>`<div class="dup-group">${g.map((b,i)=>`<label class="dup-row"><input type="radio" name="dup${gi}" value="${b.id}" ${i===0?"checked":""}><span><b>${esc(b.name||"(không tên)")}</b><small>${esc(b.phone||"Không SĐT")}${b.company?` · ${esc(b.company)}`:""} · ${jobsOf(b)} job</small></span></label>`).join("")}<button class="outline-btn" onclick="mergeDupGroup(${gi})">Gộp nhóm này</button></div>`).join("")}`);
+  window._dupGroups=groups;
+}
+function mergeDupGroup(gi){const g=window._dupGroups[gi];if(!g)return;const keep=document.querySelector(`input[name="dup${gi}"]:checked`)?.value||g[0].id;const n=mergeBookers(keep,g.map(b=>b.id));save();showToast(`Đã gộp ${n} booker trùng ✓`);openBookerDups();}
+function mergeAllDups(){const groups=bookerDupGroups();if(!confirm(`Gộp ${groups.length} nhóm booker trùng? Mỗi nhóm giữ bản có nhiều job/thông tin nhất.`))return;let n=0;groups.forEach(g=>{n+=mergeBookers(g[0].id,g.map(b=>b.id));});save();showToast(`Đã gộp ${n} booker trùng ✓`);openBookerDups();}
 // ---- V23.6: tài chính: Giá trị · Đã cọc · Chiết khấu (back) · Đã thanh toán đủ ----
 function fin(j){const total=Number(j.total||0),deposit=Number(j.deposit||0),commission=Number(j.commission||0);const paidFull=!!j.paidFull;const received=paidFull?Math.max(total,deposit):deposit;const due=paidFull?0:Math.max(0,total-deposit);return {total,deposit,commission,paidFull,received,due,net:Math.max(0,total-commission)};}
 // ---- V23.8: Theo dõi thanh toán ----
@@ -706,6 +744,7 @@ bookers(){
  arr.sort((a,b)=>a.name.localeCompare(b.name,"vi"));
  return `<div class="section-head"><div><div class="eyebrow">CONTACTS</div><h2>Booker</h2></div><button class="black-btn" onclick="openBookerForm()">${icon("plus",15)} Booker mới</button></div>
  <div class="search-wrap"><span>${icon("search",17)}</span><input class="search" value="${esc(bookerSearch)}" placeholder="Tìm booker..." oninput="bookerSearch=this.value;render()"></div>
+ ${(()=>{const g=bookerDupGroups();return g.length?`<button class="dup-banner" onclick="openBookerDups()"><b>${g.reduce((s,x)=>s+x.length-1,0)} booker bị trùng</b><span>Xem & gộp ›</span></button>`:"";})()}
  <div class="booker-list">${arr.map(bookerRow).join("")||'<div class="empty">Chưa có booker.</div>'}</div>`;
 },
 notes(){
@@ -1058,7 +1097,9 @@ function openBookerForm(existing=null){
  openModal(`<div class="sheet-head"><div><div class="eyebrow">${existing?"EDIT":"NEW"}</div><h2>${existing?"Sửa booker":"Thêm booker"}</h2></div><button class="close" onclick="closeModal()">×</button></div>
  <form class="form" onsubmit="saveBooker(event,'${b.id}')">${field("Tên booker","name",b.name,true)}${field("SĐT / Zalo","phone",b.phone)}${field("Link Messenger","messengerLink",b.messengerLink)}${field("Email","email",b.email)}${field("Công ty / agency","company",b.company)}${field("Ghi chú","notes",b.notes,false,"textarea")}<div class="small">Zalo chỉ lưu số điện thoại. Messenger dùng link đã lưu để mở chat bằng một chạm.</div><button class="black-btn submit">Lưu profile</button></form>`);
 }
-function saveBooker(e,id){e.preventDefault();const d=Object.fromEntries(new FormData(e.target).entries());if(id)Object.assign(state.bookers.find(b=>b.id===id),d);else state.bookers.push({...d,id:makeId(),createdAt:new Date().toISOString()});save();closeModal();render()}
+function saveBooker(e,id){e.preventDefault();const d=Object.fromEntries(new FormData(e.target).entries());
+  if(!id){const ex=bkFind(d.name,d.phone);if(ex&&confirm(`Đã có booker “${ex.name}”${ex.phone?` (${ex.phone})`:""}.\n\nBấm OK để dùng booker có sẵn (bổ sung thông tin mới vào đó), Huỷ để vẫn tạo booker mới.`)){["phone","zalo","messengerLink","email","company","notes"].forEach(k=>{if(!String(ex[k]||"").trim()&&String(d[k]||"").trim())ex[k]=d[k];});save();closeModal();render();openBooker(ex.id);return;}}
+  if(id)Object.assign(state.bookers.find(b=>b.id===id),d);else state.bookers.push({...d,id:makeId(),createdAt:new Date().toISOString()});save();closeModal();render()}
 var noteSearch="",noteFilter="all",noteSort="edited",noteRange="all",noteDirty=false;
 function noteJob(n){return n&&n.jobId?state.jobs.find(j=>j.id===n.jobId):null;}
 function noteTime(n){return Date.parse(n.updatedAt||"")||n._u||Date.parse(n.createdAt||"")||0;}
@@ -1234,7 +1275,22 @@ const READER_KEY="mcta_reader";
 let readerWake=null,readerScrollTimer=null;
 function readerPrefs(){try{return {size:30,dark:true,speed:0,...JSON.parse(localStorage.getItem(READER_KEY)||"{}")};}catch(_){return {size:30,dark:true,speed:0};}}
 function saveReaderPrefs(p){try{localStorage.setItem(READER_KEY,JSON.stringify(p));}catch(_){}}
-async function keepAwake(on){try{if(on&&"wakeLock" in navigator){readerWake=await navigator.wakeLock.request("screen");}else if(!on&&readerWake){await readerWake.release();readerWake=null;}}catch(_){}}
+// V28.9: giữ màn hình sáng CHỈ khi đang ở chế độ Đọc. Bản cũ có thể "rò" khoá màn hình: mở Đọc rồi đóng nhanh (yêu cầu
+// chưa xong đã đóng) hoặc mở Đọc lần nữa khi đang đọc → khoá cũ không được nhả, màn hình iPad không tự tắt suốt lúc dùng app.
+let wakeWanted=false,wakeBusy=null;
+async function keepAwake(on){
+  wakeWanted=!!on;
+  try{
+    if(wakeBusy)await wakeBusy.catch(()=>{});
+    if(wakeWanted&&!readerWake&&"wakeLock" in navigator&&document.visibilityState==="visible"){
+      wakeBusy=navigator.wakeLock.request("screen");const lock=await wakeBusy;wakeBusy=null;
+      if(!wakeWanted||!document.documentElement.classList.contains("reader-open")){await lock.release().catch(()=>{});return;}
+      readerWake=lock;lock.addEventListener("release",()=>{if(readerWake===lock)readerWake=null;});
+    }else if(!wakeWanted&&readerWake){const l=readerWake;readerWake=null;await l.release().catch(()=>{});}
+  }catch(_){wakeBusy=null;}
+}
+document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="hidden"&&readerWake){const l=readerWake;readerWake=null;l.release().catch(()=>{});}});
+window.addEventListener("pagehide",()=>{wakeWanted=false;if(readerWake){readerWake.release().catch(()=>{});readerWake=null;}});
 function openReader(id){
   const n=state.notes.find(x=>x.id===id);if(!n)return;const p=readerPrefs();
   let r=document.getElementById("reader");if(!r){r=document.createElement("div");r.id="reader";document.body.appendChild(r);}
