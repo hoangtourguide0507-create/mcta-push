@@ -19,7 +19,8 @@
  *   GET  /resolve?u=…                             mở link rút gọn Google Maps (maps.app.goo.gl) → link đầy đủ
  *   POST /lstoken {group}  (header x-app-key)      lấy/tạo mã bí mật để Apps Script Love Story báo tin
  *   POST /lsnotify?g=…&t=…  {title, body, code}    Apps Script gọi khi dâu rể bấm Gửi → đẩy thông báo tới cả nhóm
- *   POST /translate {text, from, to}  (header x-app-key)  dịch Anh ↔ Việt bằng Workers AI (gói miễn phí 10.000 neuron/ngày)
+ *   POST /translate {text, style, glossary, before, after}  (x-app-key)  dịch Anh ↔ Việt: Gemini (khoá miễn phí) → dự phòng Workers AI
+ *   POST /aikey {key} · POST /aistatus  (x-app-key)  lưu / kiểm tra khoá Gemini
  *   GET  /status                                  → { setup, hasState }
  *   POST /setup   { key, from }                     đặt mã truy cập lần đầu (hoặc kiểm tra mã);
  *                                                   from = địa chỉ app Netlify cũ để chép dữ liệu sang
@@ -207,33 +208,111 @@ export class Hub {
     return json({ error: 'Method not allowed' }, 405);
   }
 
-  // ---- Dịch Anh ↔ Việt cho kịch bản (Cloudflare Workers AI, nằm trong gói miễn phí) ----
+  // ---- Dịch Anh ↔ Việt cho kịch bản ----
+  // Ưu tiên Gemini (Google AI Studio, gói miễn phí, khoá do bạn dán trong app); hết lượt / chưa có khoá → Workers AI (miễn phí).
+  async aiAuth(req) { const ok = await this.keyOk(req.headers.get('x-app-key')); return ok ? null : json({ ok: false, loi: 'Sai mã truy cập' }, 401); }
+  async geminiModels(key) {
+    const r = await fetch('https://generativelanguage.googleapis.com/v1beta/models?pageSize=200', { headers: { 'x-goog-api-key': key } });
+    if (!r.ok) { const j = await r.json().catch(() => ({})); throw new Error((j.error && j.error.message) || ('Google trả lỗi ' + r.status)); }
+    const j = await r.json(); return (j.models || []).filter(m => (m.supportedGenerationMethods || []).includes('generateContent')).map(m => String(m.name).replace(/^models\//, ''));
+  }
+  pickModels(avail) {
+    const pref = ['gemini-3.8-flash', 'gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-3.5-flash-lite', 'gemini-3.1-flash-lite', 'gemini-2.5-flash', 'gemini-2.5-flash-lite'];
+    const out = pref.filter(m => avail.includes(m));
+    // phòng khi Google đổi tên: thêm các bản "flash" mới nhất còn lại (không lấy bản tts/live/image/embedding)
+    avail.filter(m => /^gemini-[\d.]+-flash(-lite)?$/.test(m) && !out.includes(m)).sort().reverse().forEach(m => out.push(m));
+    return out.slice(0, 4);
+  }
+  async aiKey(req) {
+    const bad = await this.aiAuth(req); if (bad) return bad;
+    const q = await req.json().catch(() => ({})), key = String(q.key || '').trim();
+    if (!key) { await this.st.delete('gemini:key'); await this.st.delete('gemini:models'); return json({ ok: true, removed: true }); }
+    let models; try { models = this.pickModels(await this.geminiModels(key)); } catch (e) { return json({ ok: false, loi: 'Khoá không dùng được: ' + String(e.message).slice(0, 160) }, 400); }
+    if (!models.length) return json({ ok: false, loi: 'Khoá hợp lệ nhưng không thấy mô hình Gemini Flash nào' }, 400);
+    await this.st.put('gemini:key', key); await this.st.put('gemini:models', models);
+    return json({ ok: true, models });
+  }
+  async aiStatus(req) {
+    const bad = await this.aiAuth(req); if (bad) return bad;
+    const key = (this.env && this.env.GEMINI_API_KEY) || await this.st.get('gemini:key');
+    return json({ ok: true, gemini: !!key, models: (await this.st.get('gemini:models')) || [], workersAI: !!(this.env && this.env.AI) });
+  }
+  trPrompt(from, to, style, glossary, before, after) {
+    const L = { vi: 'Vietnamese', en: 'English' };
+    const STYLE = {
+      formal: 'FORMAL CEREMONY: solemn, dignified, respectful (ancestral ceremony, vows, speeches by elders). Vietnamese: "trân trọng", "kính mời", "xin phép". English: "It is my honour…", "distinguished guests", graceful and measured.',
+      warm: 'WARM WEDDING RECEPTION: heartfelt, romantic, flowing and natural, gentle charm; sounds lovely when spoken slowly into a microphone.',
+      lively: 'LIVELY EVENT: energetic, confident, punchy short phrases that get the crowd cheering; still classy and never cheesy.'
+    };
+    const EX = [
+      ['Kính thưa quý vị quan khách, quý ông bà cùng toàn thể hai họ thân mến!', 'Ladies and gentlemen, distinguished guests, and our dear families on both sides — welcome!'],
+      ['Xin mời quý vị cùng hướng mắt về sân khấu, chào đón cô dâu và chú rể của chúng ta!', 'May I invite you all to turn your attention to the stage, as we welcome our beautiful bride and groom!'],
+      ['Một tràng pháo tay thật lớn dành cho hai bạn!', "Let's give them a big round of applause!"],
+      ['Tình yêu không phải là nhìn nhau, mà là cùng nhau nhìn về một hướng.', 'Love is not about gazing at each other, but looking together in the same direction.'],
+      ['Xin trân trọng kính mời đại diện nhà trai lên phát biểu đôi lời.', "It is my honour to invite the representative of the groom's family to say a few words."],
+      ['Và giờ là khoảnh khắc mà tất cả chúng ta đều mong chờ…', 'And now, the moment we have all been waiting for…'],
+      ['Xin quý vị cùng nâng ly, chúc cho hai bạn trăm năm hạnh phúc!', 'Please raise your glasses with me — to a lifetime of love and happiness!']
+    ];
+    const ex = EX.map(([v, e]) => from === 'vi' ? `${L.vi}: ${v}\n${L.en}: ${e}` : `${L.en}: ${e}\n${L.vi}: ${v}`).join('\n\n');
+    const gl = (glossary || []).slice(0, 120).map(g => from === 'vi' ? `- "${g.vi}" → "${g.en}"` : `- "${g.en}" → "${g.vi}"`).join('\n');
+    return `You translate stage scripts for Thiên Ân, a premium bilingual (Vietnamese–English) MC for luxury weddings and events in Vietnam.
+Translate the user's text from ${L[from]} into ${L[to]} so that it sounds like a polished native MC speaking on stage — not a literal translation. Rewrite freely for natural rhythm and elegance while keeping the full meaning, facts and order.
+
+Tone for this passage — ${STYLE[style] || STYLE.warm}
+
+Strict rules:
+1. Tokens like ⟦1⟧, ⟦2⟧ stand for names or protected terms. Copy each token exactly, once, in the right place. Never translate, drop or change them.
+2. Never translate personal names, family names, nicknames, brand, venue or band names, even if they look like ordinary words (e.g. "Hồng", "An", "Ngọc", "Phúc" are names when capitalised). Keep their Vietnamese diacritics.
+3. Keep anything inside [square brackets] unchanged (stage cues).
+4. Keep the same line breaks and blank lines as the input; translate line by line.
+5. ${to === 'en' ? 'English: warm, idiomatic, British/international MC register; address the audience as "ladies and gentlemen" / "everyone"; refer to the couple as "the bride and groom" or "the newlyweds".' : 'Vietnamese: natural spoken Vietnamese with correct diacritics; address the audience as "quý vị" / "quý vị quan khách"; refer to the couple as "cô dâu chú rể" or "hai bạn"; avoid stiff word-by-word phrasing.'}
+6. Output ONLY the translated text. No quotes, no notes, no alternatives.
+${gl ? `\nAlways use this glossary:\n${gl}\n` : ''}
+Examples of the MC's voice:
+${ex}
+${before || after ? `\nSurrounding script for context only (do NOT translate or output it):\n<<<\n${String(before || '').slice(-600)}\n[…passage to translate…]\n${String(after || '').slice(0, 400)}\n>>>` : ''}`;
+  }
   async translate(req) {
     if (req.method !== 'POST') return json({ ok: false }, 405);
-    const ok = await this.keyOk(req.headers.get('x-app-key'));
-    if (!ok) return json({ ok: false, loi: 'Sai mã truy cập' }, 401);
-    if (!this.env || !this.env.AI) return json({ ok: false, loi: 'Máy chủ chưa bật Workers AI (thiếu [ai] trong wrangler.toml)' }, 500);
+    const bad = await this.aiAuth(req); if (bad) return bad;
     const q = await req.json().catch(() => ({}));
-    const text = String(q.text || '').trim().slice(0, 4000);
+    const text = String(q.text || '').trim().slice(0, 6000);
     if (!text) return json({ ok: false, loi: 'Không có chữ để dịch' }, 400);
     const vi = /[ăâđêôơưàảãáạằẳẵắặầẩẫấậèẻẽéẹềểễếệìỉĩíịòỏõóọồổỗốộờởỡớợùủũúụừửữứựỳỷỹýỵ]/i;
-    const from = q.from === 'vi' || q.from === 'en' ? q.from : (vi.test(text) ? 'vi' : 'en'), to = from === 'vi' ? 'en' : 'vi';
-    const L = { vi: 'Vietnamese', en: 'English' };
-    const sys = `You are the translator for Thiên Ân, a bilingual Vietnamese–English MC for luxury weddings and events. Translate the user's text from ${L[from]} to ${L[to]}.
-Rules: keep the meaning, the warm and elegant spoken tone suitable for reading aloud on stage; keep people's names, places and numbers unchanged; keep every line break and blank line exactly; keep anything inside [square brackets] (stage cues) unchanged; ${to === 'vi' ? 'use natural Vietnamese with correct diacritics, polite forms such as "quý vị", "hai bạn" where suitable' : 'use natural, fluent English'}.
-Output ONLY the translation — no quotes, no notes, no explanations.`;
-    let out = '', model = '@cf/google/gemma-3-12b-it';
-    try {
-      const r = await this.env.AI.run(model, { messages: [{ role: 'system', content: sys }, { role: 'user', content: text }], max_tokens: Math.min(2048, Math.ceil(text.length / 2) + 256), temperature: 0.2 });
-      out = String(r && (r.response ?? r.result?.response) || '').trim();
-    } catch (e) { out = ''; }
-    if (!out) {
-      // dự phòng: mô hình dịch chuyên dụng
-      try { model = '@cf/meta/m2m100-1.2b'; const r = await this.env.AI.run(model, { text, source_lang: from, target_lang: to }); out = String(r && r.translated_text || '').trim(); }
-      catch (e) { return json({ ok: false, loi: /limit|quota|neuron|429/i.test(String(e && e.message)) ? 'Hết lượt dịch miễn phí hôm nay — thử lại sau 7 giờ sáng' : 'Dịch lỗi: ' + String(e && e.message || e).slice(0, 120) }, 502); }
+    const from = q.from === 'vi' || q.from === 'en' ? q.from : (vi.test(text.replace(/⟦\d+⟧/g, '')) ? 'vi' : 'en'), to = from === 'vi' ? 'en' : 'vi';
+    const style = ['formal', 'warm', 'lively'].includes(q.style) ? q.style : 'warm';
+    const glossary = Array.isArray(q.glossary) ? q.glossary.filter(g => g && g.vi && g.en).map(g => ({ vi: clip(g.vi, 80), en: clip(g.en, 80) })) : [];
+    const sys = this.trPrompt(from, to, style, glossary, q.before, q.after);
+    const clean = t => String(t || '').replace(/^\s*(here is|here's|translation|bản dịch)[^\n]*:\s*\n/i, '').replace(/^["“](.*)["”]$/s, '$1').trim();
+    const errs = [];
+    // 1) Gemini
+    const key = (this.env && this.env.GEMINI_API_KEY) || await this.st.get('gemini:key');
+    if (key && !q.cloudflare) {
+      const models = (await this.st.get('gemini:models')) || ['gemini-3.8-flash', 'gemini-3.6-flash', 'gemini-3.5-flash-lite'];
+      for (const m of models) {
+        try {
+          const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
+            body: JSON.stringify({ system_instruction: { parts: [{ text: sys }] }, contents: [{ role: 'user', parts: [{ text }] }], generationConfig: { thinkingConfig: { thinkingLevel: 'low' } } })
+          });
+          const j = await r.json().catch(() => ({}));
+          if (!r.ok) { errs.push(m + ': ' + ((j.error && j.error.status) || r.status)); continue; }
+          const out = clean(((j.candidates || [])[0]?.content?.parts || []).filter(p => !p.thought).map(p => p.text || '').join(''));
+          if (out) return json({ ok: true, from, to, text: out, provider: 'gemini', model: m });
+          errs.push(m + ': trống');
+        } catch (e) { errs.push(m + ': ' + String(e.message).slice(0, 60)); }
+      }
     }
-    out = out.replace(/^(here is|here's|translation|bản dịch)[^\n]*:\s*\n/i, '').replace(/^["“](.*)["”]$/s, '$1').trim();
-    return json({ ok: true, from, to, text: out, model });
+    // 2) Cloudflare Workers AI (miễn phí 10.000 neuron/ngày)
+    if (this.env && this.env.AI) {
+      for (const m of ['@cf/aisingapore/gemma-sea-lion-v4-27b-it', '@cf/google/gemma-3-12b-it']) {
+        try { const r = await this.env.AI.run(m, { messages: [{ role: 'system', content: sys }, { role: 'user', content: text }], max_tokens: Math.min(3000, Math.ceil(text.length / 1.5) + 300) });
+          const out = clean(r && (r.response ?? r.result?.response)); if (out) return json({ ok: true, from, to, text: out, provider: 'cloudflare', model: m, note: errs.length ? 'Gemini chưa dùng được lúc này' : '' }); }
+        catch (e) { errs.push(m.split('/').pop() + ': ' + String(e.message).slice(0, 60)); }
+      }
+    }
+    const quota = errs.some(e => /RESOURCE_EXHAUSTED|429|limit|neuron/i.test(e));
+    return json({ ok: false, loi: quota ? 'Hết lượt dịch miễn phí lúc này — thử lại sau ít phút (hoặc sáng mai)' : (key || (this.env && this.env.AI) ? 'Dịch lỗi: ' + errs.join(' · ').slice(0, 200) : 'Chưa có khoá Gemini — vào Khác → Dịch kịch bản để dán khoá'), detail: errs }, 502);
   }
 
   // ---- Love Story: Apps Script báo khi dâu rể gửi câu trả lời ----
@@ -297,6 +376,8 @@ Output ONLY the translation — no quotes, no notes, no explanations.`;
       if (p === '/state' || p === '/setup' || p === '/status') return await this.data(req, p);
       if (p === '/lstoken' || p === '/lsnotify') return await this.loveStory(req, p, u);
       if (p === '/translate') return await this.translate(req);
+      if (p === '/aikey') return await this.aiKey(req);
+      if (p === '/aistatus') return await this.aiStatus(req);
       if (!['/plan', '/devices', '/sub', '/unsub', '/test'].includes(p)) return json({ ok: false, loi: 'Không có đường dẫn này' }, 404);
       if (req.method !== 'POST') return json({ ok: false, loi: 'Sai phương thức' }, 405);
       const q = await req.json().catch(() => ({}));

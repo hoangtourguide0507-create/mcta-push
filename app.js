@@ -1,5 +1,5 @@
 
-const APP_VERSION="V28.11";
+const APP_VERSION="V28.12";
 // V28.0: app chạy trên GitHub Pages; dữ liệu + thông báo nằm trên máy chủ Cloudflare riêng (mcta-push).
 const CLOUD_DEFAULT="https://mcta-push.hoangtourguide0507.workers.dev";
 const KEY="freelance_planner_v12";
@@ -853,6 +853,7 @@ more(){
  <div class="settings-list">
   <div class="setting-card"><div class="setting-icon">${icon("edit",18)}</div><div class="setting-main"><b>Tên ứng dụng</b><span>${esc(state.settings.appName)}</span></div><button class="small-black" onclick="setAppName()">Đổi</button></div>
   <div class="setting-card"><div class="setting-icon">${icon("bell",18)}</div><div class="setting-main"><b>Thông báo</b><span>${(()=>{const st=notifyStatus;if(!st)return "Bật nhắc show, lịch họp, thu tiền trên từng máy";return notifyReady(st)?`Máy này đang nhận ✓ · ${st.devices.length} máy đã bật`:"Máy này chưa nhận — chạm để bật";})()}</span></div><button class="small-black" onclick="navigate('notify')">Mở</button></div>
+  <div class="setting-card"><div class="setting-icon">🌐</div><div class="setting-main"><b>Dịch kịch bản</b><span>Gemini miễn phí · giọng MC · từ điển & tên riêng</span></div><button class="small-black" onclick="trSettings()">Mở</button></div>
   <div class="setting-card"><div class="setting-icon">💌</div><div class="setting-main"><b>Love Story</b><span>Câu trả lời của dâu rể · tạo link mời · đổ vào kịch bản</span></div><button class="small-black" onclick="lsPage()">Mở</button></div>
   <div class="setting-card"><div class="setting-icon">${icon("eye",18)}</div><div class="setting-main"><b>Hiệu ứng chuyển động</b><span>${state.settings.motion===false?"Đang tắt":"Đang bật"} · chuyển trang, nảy nút, số chạy, đóng dấu khi thu đủ tiền · chỉ máy này</span></div><button class="small-black" onclick="toggleMotion()">${state.settings.motion===false?"Bật":"Tắt"}</button></div>
   <div class="setting-card"><div class="setting-icon">${icon("calendar",18)}</div><div class="setting-main"><b>Báo cáo thu nhập</b><span>Theo tháng, booker, loại show · xuất Excel</span></div><button class="small-black" onclick="navigate('report')">Mở</button></div>
@@ -1245,39 +1246,68 @@ function openNote(existing=null,opts={}){
   document.getElementById("modal").classList.add("editor-mode");
   rteInit();fitEditor();rteStat();if(restored){noteDirty=true;noteAutoSave();showToast("Đã khôi phục và lưu bản nháp ✓");}
 }
-// ---- V28.11: dịch Anh ↔ Việt ngay trong kịch bản (Cloudflare Workers AI, miễn phí) ----
-// Bôi đen đoạn cần dịch (không bôi thì dịch đoạn đang đặt con trỏ) → bấm 🌐 Dịch → Thay thế / Chèn bên dưới / Copy.
+// ---- V28.12: dịch Anh ↔ Việt trong kịch bản — Gemini (gói miễn phí) theo giọng MC, khoá tên riêng, từ điển riêng ----
+// Bôi đen đoạn cần dịch (không bôi thì dịch dòng đang đặt con trỏ) → 🌐 Dịch → chọn giọng → Chèn bên dưới / Thay thế / Copy.
+const TR_GLOSSARY_DEFAULT=[["quý vị","ladies and gentlemen"],["quý vị quan khách","distinguished guests"],["hai họ","both families"],["nhà trai","the groom's family"],["nhà gái","the bride's family"],["cô dâu chú rể","the bride and groom"],["đôi uyên ương","the happy couple"],["lễ gia tiên","ancestral ceremony"],["lễ vu quy","bride's farewell ceremony"],["lễ thành hôn","wedding ceremony"],["lễ rước dâu","bride-welcoming procession"],["trao nhẫn","exchange of rings"],["lời thề nguyện","wedding vows"],["rót rượu","champagne pouring"],["cắt bánh cưới","cutting of the wedding cake"],["nâng ly","raise our glasses"],["sính lễ","betrothal gifts"],["đại diện nhà trai","the representative of the groom's family"],["chủ hôn","master of the ceremony"],["song thân","parents"],["phụ dâu","bridesmaids"],["phụ rể","groomsmen"],["khoảnh khắc thiêng liêng","sacred moment"],["trăm năm hạnh phúc","a lifetime of happiness"],["tiệc cưới","wedding reception"],["Love Story","Love Story"]];
+function trGlossary(){const g=state.settings.trGlossary;return Array.isArray(g)?g:TR_GLOSSARY_DEFAULT.map(([vi,en])=>({vi,en}));}
+function trKeepList(){return String(state.settings.trKeep||"").split(/\n|,/).map(x=>x.trim()).filter(x=>x.length>=2);}
+function trStyle(){try{return localStorage.getItem("mcta_tr_style")||"warm";}catch(_){return "warm";}}
+// Thu thập tên riêng cần giữ nguyên: dâu rể, booker, địa điểm của job gắn với kịch bản, dòng "Ba: …", tên viết hoa giữa câu, danh sách riêng
+function trNames(fullText){
+  const out=new Set(trKeepList());const f=document.querySelector("#modalCard form.note-editor"),jid=f?.elements.jobId?.value,job=jid&&state.jobs.find(j=>j.id===jid);
+  if(job){[job.locationName,job.location,getBooker(job)?.name,...lsGuessNames(job)].forEach(x=>x&&out.add(String(x).trim()));const c=job.lsCode&&(LS.couples||[]).find(x=>x.code===job.lsCode);if(c){out.add(c.brideName);out.add(c.groomName);}}
+  const t=String(fullText||"");let m;
+  const lab=/^\s*(?:ba|bố|mẹ|má|ông|bà|cô dâu|chú rể|anh|chị|em|MC|ca sĩ|ban nhạc|nhà hàng|khách sạn|địa điểm|venue|bride|groom|father|mother|singer|band)\b[^:\n]{0,24}:\s*([^\n]{2,48})$/gimu;
+  while((m=lab.exec(t)))m[1].split(/\s*(?:&|,| và | and )\s*/).forEach(x=>{x=x.replace(/[.;!?]+$/,"").trim();if(x.length>=2)out.add(x);});
+  const cap=/(?<=[^\n.!?:][ \t])(\p{Lu}[\p{Ll}\p{M}]+(?:[ \t]+\p{Lu}[\p{Ll}\p{M}]+){1,4})/gu;
+  while((m=cap.exec(t))){const w=m[1];if(!/^(Kính|Xin|Quý|Thưa|Ladies|Dear|Love Story|Mr|Mrs|Ms)\b/.test(w))out.add(w);}
+  return [...out].filter(x=>x&&x.length>=2&&x.length<=60).sort((a,b)=>b.length-a.length);
+}
+function trProtect(text,names){const used=[];let t=text;
+  names.forEach(n=>{const re=new RegExp(`(?<![\\p{L}\\p{M}])${n.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")}(?![\\p{L}\\p{M}])`,"gu");if(re.test(t)){used.push(n);const k=used.length;t=t.replace(re,`⟦${k}⟧`);}});
+  return {t,used};}
+function trRestore(text,used){return String(text||"").replace(/⟦\s*(\d+)\s*⟧/g,(m,i)=>used[Number(i)-1]??m);}
 let rteTr=null;
 function rteBlockOf(node){const e=rteEl();let n=node&&node.nodeType===3?node.parentNode:node;while(n&&n!==e&&!/^(DIV|P|LI|H3)$/.test(n.tagName))n=n.parentNode;return n&&n!==e?n:null;}
-async function rteTranslate(){
+function rteTrContext(range){const e=rteEl();try{const a=document.createRange();a.selectNodeContents(e);a.setEnd(range.startContainer,range.startOffset);const b=document.createRange();b.selectNodeContents(e);b.setStart(range.endContainer,range.endOffset);
+  const tx=r=>{const d=document.createElement("div");d.appendChild(r.cloneContents());return htmlToText(d.innerHTML);};return {before:tx(a).slice(-600),after:tx(b).slice(0,400)};}catch(_){return {before:"",after:""};}}
+async function rteTranslate(style){
   const e=rteEl(),panel=document.getElementById("neTrans");if(!e||!panel)return;
   const pal=document.getElementById("nePalette");if(pal)pal.hidden=true;
-  if(!rteSelInside()){showToast("Đặt con trỏ hoặc bôi đen đoạn cần dịch trước");return;}
-  const sel=getSelection();let range=sel.getRangeAt(0).cloneRange();
-  if(range.collapsed){const blk=rteBlockOf(range.startContainer),r2=document.createRange();
-    if(blk)r2.selectNodeContents(blk);
-    else{// dòng chữ nằm trực tiếp trong vùng soạn (không bọc khối): lấy các phần tử cùng dòng, dừng ở xuống dòng / khối
-      let top=range.startContainer;while(top&&top.parentNode!==e)top=top.parentNode;
-      const isBreak=n=>n&&n.nodeType===1&&/^(DIV|P|LI|H3|UL|OL|HR|BR)$/.test(n.tagName);
-      if(!top||isBreak(top))r2.selectNodeContents(e);else{let a=top,b=top;while(a.previousSibling&&!isBreak(a.previousSibling))a=a.previousSibling;while(b.nextSibling&&!isBreak(b.nextSibling))b=b.nextSibling;r2.setStartBefore(a);r2.setEndAfter(b);}}
-    range=r2;sel.removeAllRanges();sel.addRange(range);range=range.cloneRange();}
+  let range;
+  if(style&&rteTr&&rteTr.range){range=rteTr.range;}
+  else{
+    if(!rteSelInside()){showToast("Đặt con trỏ hoặc bôi đen đoạn cần dịch trước");return;}
+    const sel=getSelection();range=sel.getRangeAt(0).cloneRange();
+    if(range.collapsed){const blk=rteBlockOf(range.startContainer),r2=document.createRange();
+      if(blk)r2.selectNodeContents(blk);
+      else{let top=range.startContainer;while(top&&top.parentNode!==e)top=top.parentNode;
+        const isBreak=n=>n&&n.nodeType===1&&/^(DIV|P|LI|H3|UL|OL|HR|BR)$/.test(n.tagName);
+        if(!top||isBreak(top))r2.selectNodeContents(e);else{let a=top,b=top;while(a.previousSibling&&!isBreak(a.previousSibling))a=a.previousSibling;while(b.nextSibling&&!isBreak(b.nextSibling))b=b.nextSibling;r2.setStartBefore(a);r2.setEndAfter(b);}}
+      range=r2;sel.removeAllRanges();sel.addRange(range);range=range.cloneRange();}
+  }
+  if(style){try{localStorage.setItem("mcta_tr_style",style);}catch(_){}}
+  style=style||trStyle();
   const box=document.createElement("div");box.appendChild(range.cloneContents());
   const text=htmlToText(box.innerHTML).trim();
   if(!text){showToast("Đoạn này chưa có chữ");return;}
-  if(text.length>4000){showToast("Đoạn quá dài — chọn tối đa khoảng 4.000 ký tự mỗi lần");return;}
+  if(text.length>6000){showToast("Đoạn quá dài — chọn tối đa khoảng 6.000 ký tự mỗi lần");return;}
   if(!cloudUrl()){alert("Chức năng dịch cần kết nối máy chủ Cloudflare (Khác → Máy chủ dữ liệu & thông báo).");return;}
-  rteTr={range,text,out:"",to:""};
-  panel.hidden=false;panel.innerHTML=`<div class="tr-head"><b>🌐 Đang dịch…</b><button type="button" class="tr-x" onclick="rteTrClose()">×</button></div><div class="tr-out muted">${esc(text.slice(0,160))}${text.length>160?"…":""}</div>`;
+  const names=trNames(e.innerText||""),{t:safe,used}=trProtect(text,names),ctx=rteTrContext(range);
+  const seq=Date.now();rteTr={range,text,out:"",to:"",seq,style};
+  const chips=`<div class="tr-styles">${[["formal","Trang trọng"],["warm","Ấm áp"],["lively","Sôi động"]].map(([k,v])=>`<button type="button" class="tr-chip ${k===style?"on":""}" onclick="rteTranslate('${k}')">${v}</button>`).join("")}</div>`;
+  panel.hidden=false;panel.innerHTML=`<div class="tr-head"><b>🌐 Đang dịch…</b><button type="button" class="tr-x" onclick="rteTrClose()">×</button></div>${chips}<div class="tr-out muted">${esc(text.slice(0,160))}${text.length>160?"…":""}</div>`;
   try{
-    const r=await fetch(cloudUrl()+"/translate",{method:"POST",headers:{"Content-Type":"application/json","x-app-key":accessKey()},body:JSON.stringify({text})});
+    const r=await fetch(cloudUrl()+"/translate",{method:"POST",headers:{"Content-Type":"application/json","x-app-key":accessKey()},body:JSON.stringify({text:safe,style,glossary:trGlossary(),before:trProtect(ctx.before,names).t,after:trProtect(ctx.after,names).t})});
     const j=await r.json().catch(()=>({}));
     if(!r.ok||!j.ok)throw new Error(j.loi||("Máy chủ trả lỗi "+r.status));
-    if(!rteTr||rteTr.text!==text)return;
-    rteTr.out=j.text;rteTr.to=j.to;
-    panel.innerHTML=`<div class="tr-head"><b>${j.to==="en"?"Việt → Anh":"Anh → Việt"}</b><button type="button" class="tr-x" onclick="rteTrClose()">×</button></div>
-     <div class="tr-out">${esc(j.text).replace(/\n/g,"<br>")}</div>
-     <div class="tr-act"><button type="button" class="black-btn" onclick="rteTrApply('below')">Chèn bên dưới</button><button type="button" class="outline-btn" onclick="rteTrApply('replace')">Thay thế</button><button type="button" class="outline-btn" onclick="lsCopy(rteTr.out,'Đã copy bản dịch')">Copy</button></div>`;
-  }catch(err){if(panel&&!panel.hidden)panel.innerHTML=`<div class="tr-head"><b>Chưa dịch được</b><button type="button" class="tr-x" onclick="rteTrClose()">×</button></div><div class="tr-out">${esc(err.message||String(err))}</div><div class="tr-act"><button type="button" class="outline-btn" onclick="rteTranslate()">Thử lại</button></div>`;}
+    if(!rteTr||rteTr.seq!==seq)return;
+    rteTr.out=trRestore(j.text,used);rteTr.to=j.to;
+    const kept=used.length?`<div class="tr-kept">Giữ nguyên: ${used.map(esc).join(", ")}</div>`:"";
+    panel.innerHTML=`<div class="tr-head"><b>${j.to==="en"?"Việt → Anh":"Anh → Việt"} <span class="tr-prov">${j.provider==="gemini"?"Gemini":"Cloudflare · dự phòng"}</span></b><button type="button" class="tr-x" onclick="rteTrClose()">×</button></div>${chips}
+     <div class="tr-out">${esc(rteTr.out).replace(/\n/g,"<br>")}</div>${kept}${j.note?`<div class="tr-kept">${esc(j.note)}</div>`:""}
+     <div class="tr-act"><button type="button" class="black-btn" onclick="rteTrApply('below')">Chèn bên dưới</button><button type="button" class="outline-btn" onclick="rteTrApply('replace')">Thay thế</button><button type="button" class="outline-btn" onclick="lsCopy(rteTr.out,'Đã copy bản dịch')">Copy</button><button type="button" class="outline-btn" onclick="rteTranslate('${style}')">Dịch lại</button></div>`;
+  }catch(err){if(panel&&!panel.hidden&&rteTr&&rteTr.seq===seq)panel.innerHTML=`<div class="tr-head"><b>Chưa dịch được</b><button type="button" class="tr-x" onclick="rteTrClose()">×</button></div><div class="tr-out">${esc(err.message||String(err))}</div><div class="tr-act"><button type="button" class="outline-btn" onclick="rteTranslate('${style}')">Thử lại</button><button type="button" class="outline-btn" onclick="trSettings()">Cài đặt dịch</button></div>`;}
 }
 function rteTrClose(){const p=document.getElementById("neTrans");if(p){p.hidden=true;p.innerHTML="";}rteTr=null;}
 function rteTrApply(mode){
@@ -1292,6 +1322,29 @@ function rteTrApply(mode){
     if(anchor&&anchor.parentNode)anchor.parentNode.insertBefore(frag,anchor.nextSibling);else e.appendChild(frag);}
   noteDirty=true;rteSnap();noteDraftSoon();noteAutoSoon();rteTrClose();showToast(mode==="replace"?"Đã thay bằng bản dịch":"Đã chèn bản dịch bên dưới");
 }
+// ---- Cài đặt dịch (Khác → Dịch kịch bản) ----
+async function trSettings(){
+  openModal(`<div class="sheet-head"><div><div class="eyebrow">DỊCH KỊCH BẢN</div><h2>Gemini · miễn phí</h2></div><button class="close" onclick="closeModal()">×</button></div><div id="trSet" class="small">Đang kiểm tra…</div>`);
+  let st={};try{const r=await fetch(cloudUrl()+"/aistatus",{method:"POST",headers:{"x-app-key":accessKey()}});st=await r.json();}catch(_){st={ok:false};}
+  const el=document.getElementById("trSet");if(!el)return;el.className="";
+  const gl=trGlossary().map(g=>`${g.vi} = ${g.en}`).join("\n");
+  el.innerHTML=`<div class="setting-card"><div class="setting-main"><b>Khoá Gemini</b><span>${st.gemini?`Đã kết nối ✓ · ${esc((st.models||[])[0]||"")}`:"Chưa có — đang dùng mô hình dự phòng của Cloudflare"}</span></div><button class="small-black" onclick="trSetKey()">${st.gemini?"Đổi":"Dán khoá"}</button></div>
+   ${st.gemini?`<button class="text-btn" onclick="trSetKey(true)">Gỡ khoá Gemini</button>`:""}
+   <details class="tr-guide" ${st.gemini?"":"open"}><summary>Cách lấy khoá miễn phí (2 phút)</summary><ol><li>Mở <b>aistudio.google.com/apikey</b> bằng Safari, đăng nhập Google.</li><li>Bấm <b>Create API key</b> (Tạo khoá API) → chọn một dự án bất kỳ hoặc để Google tạo mới.</li><li>Bấm biểu tượng copy cạnh khoá (dạng <code>AIza…</code>).</li><li>Quay lại đây bấm <b>Dán khoá</b>.</li></ol><div class="small">Không cần thẻ thanh toán. Lưu ý: ở gói miễn phí, Google có thể dùng nội dung gửi lên để cải thiện sản phẩm.</div></details>
+   <label class="field"><span>Từ điển MC (mỗi dòng: tiếng Việt = English)</span><textarea class="field-control" id="trGl" rows="8">${esc(gl)}</textarea></label>
+   <label class="field"><span>Tên riêng luôn giữ nguyên (mỗi dòng một tên — nhà hàng, ban nhạc, nhãn hàng…)</span><textarea class="field-control" id="trKp" rows="4" placeholder="vd: White Palace&#10;GEM Center&#10;Ban nhạc Sóng">${esc(state.settings.trKeep||"")}</textarea></label>
+   <div class="small pay-note">Tên dâu rể, ba mẹ (dòng "Ba: …", "Mẹ: …"), booker, địa điểm của job và tên viết hoa giữa câu được app tự giữ nguyên.</div>
+   <button class="black-btn" onclick="trSaveLists()">Lưu từ điển</button> <button class="text-btn" onclick="if(confirm('Đặt lại từ điển mặc định?')){delete state.settings.trGlossary;save();trSettings();}">Đặt lại mặc định</button>`;
+}
+async function trSetKey(remove){
+  let key="";if(!remove){key=(prompt("Dán khoá Gemini (bắt đầu bằng AIza…):")||"").trim();if(!key)return;}else if(!confirm("Gỡ khoá Gemini? App sẽ dịch bằng mô hình dự phòng của Cloudflare."))return;
+  showToast(remove?"Đang gỡ…":"Đang kiểm tra khoá…");
+  try{const r=await fetch(cloudUrl()+"/aikey",{method:"POST",headers:{"Content-Type":"application/json","x-app-key":accessKey()},body:JSON.stringify({key})});const j=await r.json().catch(()=>({}));
+    if(!r.ok||!j.ok)throw new Error(j.loi||("Máy chủ trả lỗi "+r.status));showToast(remove?"Đã gỡ khoá":"Đã kết nối Gemini ✓");}
+  catch(e){alert(e.message);}trSettings();
+}
+function trSaveLists(){const g=(document.getElementById("trGl")?.value||"").split("\n").map(l=>l.split("=")).filter(p=>p.length>=2&&p[0].trim()&&p.slice(1).join("=").trim()).map(p=>({vi:p[0].trim(),en:p.slice(1).join("=").trim()}));
+  state.settings.trGlossary=g;state.settings.trKeep=(document.getElementById("trKp")?.value||"").trim();save();showToast(`Đã lưu ${g.length} cụm từ ✓`);}
 // ---- V28.2: thanh công cụ soạn kịch bản đầy đủ hơn ----
 const RTE_FORE=[["#e5304f","Đỏ"],["#2563eb","Xanh dương"],["#059669","Xanh lá"],["#ea580c","Cam"],["#7c3aed","Tím"],["#111827","Đen"]];
 const RTE_HILI=[["#fff3a3","Vàng"],["#c8f7dc","Xanh lá"],["#ffd6e7","Hồng"],["#d6e9ff","Xanh"],["transparent","Bỏ tô"]];
