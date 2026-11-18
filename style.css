@@ -1059,3 +1059,4 @@ button{color:inherit}
 .tr-guide{margin:10px 0;font-size:13.5px}.tr-guide summary{font-weight:800;cursor:pointer;padding:6px 0}.tr-guide ol{padding-left:20px;margin:6px 0;line-height:1.55}
 :root[data-theme="stage"] .tr-chip.on{background:var(--gold-grad);color:#1a1306}
 :root[data-theme="stage"] .tr-prov{background:#23232f}
+.rte,.rte-view{tab-size:4;-moz-tab-size:4}

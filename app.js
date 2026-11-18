@@ -1,5 +1,5 @@
 
-const APP_VERSION="V28.12";
+const APP_VERSION="V28.13";
 // V28.0: app chạy trên GitHub Pages; dữ liệu + thông báo nằm trên máy chủ Cloudflare riêng (mcta-push).
 const CLOUD_DEFAULT="https://mcta-push.hoangtourguide0507.workers.dev";
 const KEY="freelance_planner_v12";
@@ -1160,7 +1160,14 @@ function rteCmd(cmd,val){clearTimeout(rteTimer);rteSnap();if(!rteSelInside())rte
 function rteMark(color){rteCmd("hiliteColor",color);}
 function rteColor(color){rteCmd("foreColor",color);}
 function rteUpper(){const sel=getSelection();if(!rteSelInside()||sel.isCollapsed){showToast("Bôi đen chữ cần IN HOA trước");return;}const t=sel.toString();const up=t.toUpperCase();rteCmd("insertText",up===t?t.toLowerCase():up);}
-function rteCue(){if(!rteSelInside())rteEl().focus();rteCmd("insertHTML",'<span style="color:#e5304f;font-weight:bold">[CUE: ]</span>&nbsp;');}
+// V28.13: Tab như Word — chèn ký tự tab; đang ở gạch đầu dòng/danh sách số thì lùi mục vào trong (Shift+Tab: ra ngoài)
+function rteInList(){const s=getSelection();if(!s.rangeCount)return false;let n=s.getRangeAt(0).startContainer;while(n&&n!==rteEl()){if(n.nodeName==="LI")return true;n=n.parentNode;}return false;}
+function rteTab(back){
+  if(!rteSelInside())rteEl().focus();
+  if(rteInList()){rteCmd(back?"outdent":"indent");return;}
+  if(back){const s=getSelection();if(!s.rangeCount)return;const r=s.getRangeAt(0);if(r.collapsed&&r.startContainer.nodeType===3&&r.startOffset>0&&r.startContainer.data[r.startOffset-1]==="\t"){clearTimeout(rteTimer);rteSnap();r.setStart(r.startContainer,r.startOffset-1);r.deleteContents();noteDirty=true;rteSnap();noteDraftSoon();noteAutoSoon();}return;}
+  rteCmd("insertText","\t");noteDraftSoon();noteAutoSoon();
+}
 function rteClear(){rteCmd("removeFormat");rteCmd("formatBlock","DIV");}
 // ---- V28.8: dán giữ định dạng (đậm, nghiêng, gạch chân, gạch ngang, tiêu đề, gạch đầu dòng) ----
 // Nguồn có HTML (Google Docs, Word, Pages, Ghi chú, web): đổi kiểu chữ về thẻ gọn, bỏ font/cỡ chữ/màu đen mặc định.
@@ -1216,7 +1223,7 @@ function mdToHtml(t){const out=[];let list=null;const close=()=>{if(list){out.pu
     if((m=l.match(/^\s*\d+[.)]\s+(.*)$/))){if(list!=="ol"){close();out.push("<ol>");list="ol";}out.push(`<li>${mdInline(m[1])}</li>`);continue;}
     close();out.push(l.trim()?`<div>${mdInline(l.replace(/^>\s?/,""))}</div>`:"<div><br></div>");}
   close();return out.join("");}
-document.addEventListener("keydown",e=>{if(!rteEl()||!document.activeElement||document.activeElement!==rteEl())return;const k=e.key.toLowerCase();if((e.metaKey||e.ctrlKey)&&k==="z"){e.preventDefault();e.shiftKey?rteRedo():rteUndo();}else if((e.metaKey||e.ctrlKey)&&k==="y"){e.preventDefault();rteRedo();}});
+document.addEventListener("keydown",e=>{if(!rteEl()||!document.activeElement||document.activeElement!==rteEl())return;if(e.key==="Tab"&&!e.metaKey&&!e.ctrlKey&&!e.altKey){e.preventDefault();rteTab(e.shiftKey);return;}const k=e.key.toLowerCase();if((e.metaKey||e.ctrlKey)&&k==="z"){e.preventDefault();e.shiftKey?rteRedo():rteUndo();}else if((e.metaKey||e.ctrlKey)&&k==="y"){e.preventDefault();rteRedo();}});
 function openNote(existing=null,opts={}){
   let n=existing||{id:"",title:"",body:"",jobId:opts.jobId||"",kind:opts.kind||"script"};const p=readerPrefs();noteDirty=false;
   // Còn bản nháp chưa lưu (app bị đóng / tải lại giữa chừng) → hỏi khôi phục
@@ -1235,7 +1242,7 @@ function openNote(existing=null,opts={}){
     <div class="ne-trans" id="neTrans" hidden></div>
     <div class="ne-toolbar" id="neToolbar">
      ${tb("rteCmd('bold')","<b>B</b>","In đậm")}${tb("rteCmd('italic')","<i>I</i>","In nghiêng")}${tb("rteCmd('underline')","<u>U</u>","Gạch chân")}${tb("rteCmd('strikeThrough')","<s>S</s>","Gạch ngang")}<i class="tb-sep"></i>
-     ${tb("rtePalette('fore')",'<span class="tb-color">A</span>',"Màu chữ")}${tb("rtePalette('hili')",'<span class="tb-hl">A</span>',"Tô nền")}${tb("rteTranslate()",'<span class="tb-tr">🌐 Dịch</span>',"Dịch Anh ↔ Việt (đoạn đang chọn)","tb-wide")}${tb("rteEN()",'<span class="tb-en">EN</span>',"Dòng tiếng Anh (nghiêng, xanh)")}${tb("rteCue()","[cue]","Chèn cue")}<i class="tb-sep"></i>
+     ${tb("rtePalette('fore')",'<span class="tb-color">A</span>',"Màu chữ")}${tb("rtePalette('hili')",'<span class="tb-hl">A</span>',"Tô nền")}${tb("rteTranslate()",'<span class="tb-tr">🌐 Dịch</span>',"Dịch Anh ↔ Việt (đoạn đang chọn)","tb-wide")}${tb("rteEN()",'<span class="tb-en">EN</span>',"Dòng tiếng Anh (nghiêng, xanh)")}${tb("rteTab()","⇥ Tab","Tab — thụt đầu dòng như Word (trong danh sách: lùi mục vào trong)","tb-wide")}${tb("rteTab(true)","⇤","Bỏ tab / đưa mục danh sách ra ngoài")}<i class="tb-sep"></i>
      ${tb("rteBlock('H3')","H","Tiêu đề đoạn")}${tb("rteCmd('insertUnorderedList')","•≡","Gạch đầu dòng")}${tb("rteCmd('insertOrderedList')","1.≡","Danh sách số")}${tb("rteAlign()",'<span class="tb-al">≡</span>',"Căn giữa / căn trái")}${tb("rteHr()","—","Đường kẻ ngăn đoạn")}<i class="tb-sep"></i>
      ${tb("rteUpper()","AA","IN HOA chữ đang chọn")}${tb("rteClear()","Tx","Xoá định dạng")}${tb("editorSize(-1)","A−","Chữ nhỏ lại")}${tb("editorSize(1)","A+","Chữ to lên")}
     </div>
@@ -1467,7 +1474,7 @@ function htmlToParas(html){
   while(paras.length&&!paras[paras.length-1].runs.length&&paras[paras.length-1].st!=="hr")paras.pop();
   return paras;
 }
-function runXml(r,extra=""){const p=[extra];if(r.b)p.push("<w:b/>");if(r.i)p.push("<w:i/>");if(r.u)p.push('<w:u w:val="single"/>');if(r.s)p.push("<w:strike/>");if(r.c)p.push(`<w:color w:val="${r.c}"/>`);if(r.h)p.push(`<w:shd w:val="clear" w:color="auto" w:fill="${r.h}"/>`);return `<w:r><w:rPr>${p.join("")}</w:rPr><w:t xml:space="preserve">${xmlEsc(r.t)}</w:t></w:r>`;}
+function runXml(r,extra=""){const p=[extra];if(r.b)p.push("<w:b/>");if(r.i)p.push("<w:i/>");if(r.u)p.push('<w:u w:val="single"/>');if(r.s)p.push("<w:strike/>");if(r.c)p.push(`<w:color w:val="${r.c}"/>`);if(r.h)p.push(`<w:shd w:val="clear" w:color="auto" w:fill="${r.h}"/>`);return `<w:r><w:rPr>${p.join("")}</w:rPr>${String(r.t).split("\t").map(x=>`<w:t xml:space="preserve">${xmlEsc(x)}</w:t>`).join("<w:tab/>")}</w:r>`;}
 function paraXml(pa){const jc=pa.al?`<w:jc w:val="${pa.al}"/>`:"";
   if(pa.st==="hr")return '<w:p><w:pPr><w:pBdr><w:bottom w:val="single" w:sz="8" w:space="1" w:color="9CA3AF"/></w:pBdr></w:pPr></w:p>';
   if(pa.st==="h")return `<w:p><w:pPr><w:spacing w:before="240" w:after="80"/><w:keepNext/>${jc}</w:pPr>${pa.runs.map(r=>runXml({...r,b:1},'<w:sz w:val="30"/>')).join("")}</w:p>`;
@@ -1634,7 +1641,16 @@ function buildPlan(st,now){
 function strHash(s){let h=5381;for(let i=0;i<s.length;i++)h=(h*33+s.charCodeAt(i))|0;return (h>>>0).toString(36)+":"+s.length;}
 let planTimer=null,planBusy=false;
 // Gọi sau mỗi lần đồng bộ thành công (dữ liệu đã khớp cloud) để mọi máy cùng giữ lịch nhắc mới nhất.
-function afterCloudSync(){schedulePlan();setTimeout(autoDedupeBookers,800);}
+function afterCloudSync(){schedulePlan();setTimeout(autoDedupeBookers,800);setTimeout(cleanLsAnswerNotes,1000);}
+// V28.13: câu trả lời Love Story xem ngay trong thẻ Love Story — bỏ các "kịch bản" chứa câu trả lời do app tạo trước đây.
+// Bản chưa sửa gì thì xoá; bản bạn đã sửa thì giữ lại như một kịch bản Love Story bình thường.
+function cleanLsAnswerNotes(){
+  if(state.settings.lsNotesV>=1)return;state.settings.lsNotesV=1;let del=0,kept=0;
+  state.notes=state.notes.filter(n=>{if(!n.lsCode)return true;
+    const untouched=Math.abs(Date.parse(n.updatedAt||0)-Date.parse(n.createdAt||0))<15000;
+    if(untouched){del++;return false;}delete n.lsCode;n.title=String(n.title||"").replace(/\s*\(câu trả lời\)\s*$/,"");kept++;return true;});
+  save();if(del||kept){render();showToast(del?`Đã bỏ ${del} bản câu trả lời Love Story khỏi Kịch bản`:"Đã cập nhật Kịch bản");}
+}
 function schedulePlan(delay=1200){if(localMode||!pushServer()||!pushGroup())return;clearTimeout(planTimer);planTimer=setTimeout(async()=>{await joinIfNeeded();uploadPlan(false);},delay);}
 // Máy đã cho phép thông báo nhưng chưa đăng ký với máy chủ/nhóm hiện tại (vd. vừa nhận địa chỉ máy chủ qua đồng bộ) → tự đăng ký.
 async function joinIfNeeded(){try{if(!pushSupported()||Notification.permission!=="granted"||pushMeta().enabled===false||(isIOS()&&!isStandalone()))return;if(pushMeta().postedTo===pushServer()+"|"+pushGroup())return;await ensureSubscribed(false);if(page==="notify"){await checkNotify();render();}}catch(_){}}
@@ -1876,7 +1892,7 @@ async function hydrateLoveStory(j){
     w2.innerHTML=`${j.lsCode?`<div class="small pay-note">Cặp đôi đã gắn không còn trên Google Sheet (có thể đã tự xoá sau 6 tháng).</div>`:""}<div class="ls-empty">${near.map(x=>`<button class="outline-btn" onclick="lsLink2Job('${j.id}','${esc(x.code)}')">Gắn ${esc(x.brideName)} &amp; ${esc(x.groomName)} (${fmtDate(x.weddingDate)})</button>`).join("")}<button class="outline-btn" onclick="lsCreateForJob('${j.id}')">＋ Tạo link Love Story</button>${list.some(x=>!lsJobFor(x.code))?`<button class="text-btn" onclick="lsPickForJob('${j.id}')">Chọn cặp đã có…</button>`:""}</div>`;return;}
   w2.innerHTML=`<div class="ls-card"><div class="ls-names"><b>${esc(c.brideName)} &amp; ${esc(c.groomName)}</b><span>${lsChip("bride",c.brideStatus)}${lsChip("groom",c.groomStatus)}</span></div>
    <div class="ls-actions"><button class="outline-btn" onclick="lsCopyMsg('${esc(c.code)}','vi')">Copy tin mời (VI)</button><button class="outline-btn" onclick="lsCopyMsg('${esc(c.code)}','en')">(EN)</button><button class="outline-btn" onclick="lsCopyMsg('${esc(c.code)}','url')">Copy link</button></div>
-   <div class="ls-actions"><button class="black-btn" onclick="lsOpen('${esc(c.code)}')">Xem câu trả lời</button>${c.brideStatus==="submitted"||c.groomStatus==="submitted"||c.brideStatus==="draft"||c.groomStatus==="draft"?`<button class="outline-btn" onclick="lsMakeNote('${esc(c.code)}')">✍️ Tạo kịch bản</button>`:""}</div></div>`;
+   <div class="ls-actions"><button class="black-btn" onclick="lsOpen('${esc(c.code)}')">Xem câu trả lời</button><button class="outline-btn" onclick="closeModal();openJobAfterNote=true;openNote(null,{jobId:'${j.id}',kind:'lovestory'})">✍️ Viết Love Story</button></div></div>`;
 }
 async function lsLogin(jobId){try{LS.at=0;await lsList(true);}catch(e){alert(e.message);}const j=state.jobs.find(x=>x.id===jobId);if(j&&document.getElementById("lsWrap"))hydrateLoveStory(j);}
 // Tự gắn cặp đôi với job cưới: cùng ngày cưới, và ngày đó chỉ có đúng 1 cặp chưa gắn + 1 job cưới chưa gắn
@@ -1929,7 +1945,7 @@ async function lsOpen(code){
      <div class="ls-names"><span>${lsChip("bride",c.brideStatus)}${lsChip("groom",c.groomStatus)}</span></div>
      <div class="small">Dâu: ${esc(meta(d.bride))}<br>Rể: ${esc(meta(d.groom))}</div>
      ${job?`<div class="small pay-note">Đã gắn job: <b>${esc(job.title)}</b> (${fmtDate(job.date)})</div>`:(()=>{const cand=lsJobCandidates(c);return `<div class="ls-link-job"><span class="small">Chưa gắn job — gắn để thấy Love Story ngay trong job:</span>${cand.length?cand.map(x=>`<button class="outline-btn" onclick="lsLinkFromCouple('${esc(code)}','${x.id}')">${esc(x.title)} · ${fmtDate(x.date)}</button>`).join(""):'<span class="small">Không có job nào gần ngày cưới này.</span>'}</div>`;})()}
-     <div class="ls-actions"><button class="black-btn" onclick="lsMakeNote('${esc(code)}')">✍️ Tạo kịch bản Love Story</button><button class="outline-btn" onclick="lsCopy(lsAiBrief(),'Đã copy — dán vào Claude để viết kịch bản')">Copy cho AI</button><button class="outline-btn" onclick="lsCopyMsg('${esc(code)}','vi')">Tin mời</button></div>
+     <div class="ls-actions">${job?`<button class="black-btn" onclick="closeModal();openJobAfterNote=true;openNote(null,{jobId:'${job.id}',kind:'lovestory'})">✍️ Viết Love Story</button>`:""}<button class="outline-btn" onclick="lsCopy(lsAiBrief(),'Đã copy — dán vào Claude để viết kịch bản')">Copy cho AI</button><button class="outline-btn" onclick="lsCopyMsg('${esc(code)}','vi')">Tin mời</button></div>
      ${secs||'<div class="empty">Chưa có câu trả lời nào.</div>'}`);
   }catch(e){openModal(`<div class="sheet-head"><div><div class="eyebrow">LOVE STORY</div><h2>Không tải được</h2></div><button class="close" onclick="closeModal()">×</button></div><div class="empty">${esc(e.message)}</div><button class="outline-btn" onclick="lsOpen('${esc(code)}')">Thử lại</button>`);}
 }
@@ -1944,21 +1960,6 @@ function lsAiBrief(){const d=lsCurrent,Q=LS.Q;if(!d||!Q)return "";const c=d.coup
   L.push("","# CHIA SẺ CỦA CÔ DÂU VÀ CHÚ RỂ");const skip={q5_4:1,q5_5:1,q5_6:1};
   Q.sections.forEach(sec=>{const block=[];sec.questions.forEach(q=>{if(skip[q.id])return;const bv=val(q,ba),gv=val(q,ga);if(bv==null&&gv==null)return;block.push("",`### ${lsLabel(q)}${q.private?" [RIÊNG TƯ — chỉ MC đọc]":""}`,`- Cô dâu (${B}): ${bv==null?"(không trả lời)":bv.replace(/\n/g,"\n  ")}`,`- Chú rể (${G}): ${gv==null?"(không trả lời)":gv.replace(/\n/g,"\n  ")}`);});if(block.length)L.push("",`## ${sec.title.vi}`,...block);});
   return L.join("\n");}
-// Đổ câu trả lời thành một kịch bản (note) loại Love Story, gắn với job — mở lại lần sau thì cập nhật đúng note đó
-async function lsMakeNote(code){
-  try{if(!lsCurrent||lsCurrent.couple.code!==code){const [Q,d]=await Promise.all([lsQuestions(),lsCall("adminGet",{code})]);lsCurrent=d;}
-    const d=lsCurrent,Q=LS.Q,c=d.couple,ba=d.bride?.answers||{},ga=d.groom?.answers||{},job=lsJobFor(code);
-    let h=`<h3>Love Story · ${esc(c.brideName)} &amp; ${esc(c.groomName)}</h3><div>Ngày cưới ${fmtDate(c.weddingDate)}${c.venue?` · ${esc(c.venue)}`:""}</div><div><span style="color:#2563eb">■ Cô dâu ${esc(c.brideName)}</span> · <span style="color:#e5304f">■ Chú rể ${esc(c.groomName)}</span></div><hr>`;
-    Q.sections.forEach((sec,i)=>{let rows="";sec.questions.forEach(q=>{const bv=lsVisible(q,ba)?lsAnswer(q,ba[q.id]):null,gv=lsVisible(q,ga)?lsAnswer(q,ga[q.id]):null;if(bv==null&&gv==null)return;
-      rows+=`<div><b>${esc(q.num)} ${esc(lsLabel(q))}</b>${q.private?' <span style="background-color:#ffd6e7">[riêng tư]</span>':""}</div>${bv!=null?`<div><span style="color:#2563eb">Dâu: ${esc(bv).replace(/\n/g,"<br>")}</span></div>`:""}${gv!=null?`<div><span style="color:#e5304f">Rể: ${esc(gv).replace(/\n/g,"<br>")}</span></div>`:""}<div><br></div>`;});
-      if(rows)h+=`<h3>Phần ${i+1} · ${esc(sec.title.vi)}</h3>${rows}`;});
-    const html=sanitizeHtml(h),now=new Date().toISOString();let n=state.notes.find(x=>x.lsCode===code);
-    if(n&&!confirm(`Đã có “${n.title}”. Cập nhật lại theo câu trả lời mới nhất? (Nội dung cũ trong note này sẽ được thay)`)){closeModal();openNote(n);return;}
-    if(n)Object.assign(n,{html,body:htmlToText(html),updatedAt:now});
-    else{n={id:makeId(),title:`Love Story · ${c.brideName} & ${c.groomName} (câu trả lời)`,html,body:htmlToText(html),kind:"lovestory",jobId:job?.id||"",lsCode:code,createdAt:now,updatedAt:now};state.notes.push(n);}
-    save();closeModal();openNote(n);showToast("Đã đổ câu trả lời vào kịch bản ✓");
-  }catch(e){alert(e.message);}
-}
 // ---- trang Love Story (Khác) ----
 async function lsPage(){
   openModal(`<div class="sheet-head"><div><div class="eyebrow">LOVE STORY</div><h2>Các cặp đôi</h2></div><button class="close" onclick="closeModal()">×</button></div><div id="lsPageBody" class="small">Đang tải…</div>`);
