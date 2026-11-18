@@ -21,6 +21,7 @@
  *   POST /lsnotify?g=…&t=…  {title, body, code}    Apps Script gọi khi dâu rể bấm Gửi → đẩy thông báo tới cả nhóm
  *   POST /translate {text, style, glossary, before, after}  (x-app-key)  dịch Anh ↔ Việt: Gemini (khoá miễn phí) → dự phòng Workers AI
  *   POST /aikey {key} · POST /aistatus  (x-app-key)  lưu / kiểm tra khoá Gemini
+ *   POST /pdf2text  (x-app-key, body = file PDF)  Gemini đọc PDF (cả bản scan) → Markdown để nhập kịch bản
  *   GET  /status                                  → { setup, hasState }
  *   POST /setup   { key, from }                     đặt mã truy cập lần đầu (hoặc kiểm tra mã);
  *                                                   from = địa chỉ app Netlify cũ để chép dữ liệu sang
@@ -28,6 +29,7 @@
  *   PUT  /state           (header x-app-key)        gộp & lưu dữ liệu, trả bản đã gộp
  */
 
+const PDF_MAX = 14.5 * 1048576;
 const CORS = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,POST,PUT,OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type, x-app-key', 'Access-Control-Max-Age': '86400' };
 const json = (o, s = 200) => new Response(JSON.stringify(o), { status: s, headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', ...CORS } });
 const MAX_SUBS = 200, MAX_ITEMS = 500, AHEAD = 75 * 864e5, LATE = 30 * 60000;
@@ -315,6 +317,46 @@ ${before || after ? `\nSurrounding script for context only (do NOT translate or 
     return json({ ok: false, loi: quota ? 'Hết lượt dịch miễn phí lúc này — thử lại sau ít phút (hoặc sáng mai)' : (key || (this.env && this.env.AI) ? 'Dịch lỗi: ' + errs.join(' · ').slice(0, 200) : 'Chưa có khoá Gemini — vào Khác → Dịch kịch bản để dán khoá'), detail: errs }, 502);
   }
 
+  // ---- Nhập PDF: Gemini đọc file PDF (kể cả bản scan / ảnh chụp) → Markdown ----
+  pdfPrompt() {
+    return `You convert an MC's event script (wedding, gala, corporate event, conference…) from a PDF into clean Markdown for a script editor.
+Rules:
+1. Transcribe ALL the text in reading order, exactly as written — same language(s), same wording, Vietnamese diacritics exactly. Do NOT translate, summarise, shorten, correct, reorder or add anything.
+2. Keep the structure: section titles as "## Title"; **bold** and *italic* where the PDF uses them; bulleted lists as "- item"; numbered lists as "1. item"; keep separate lines and speaker turns on separate lines; a blank line between paragraphs. Join lines that were only wrapped by the page width back into one paragraph.
+3. Tables (run-of-show, timeline, cue sheet): one row per line, cells separated by " | ", header row in bold. Never use Markdown table syntax.
+4. Speaker labels (MC:, MC 1:, Cô dâu:, …) and stage cues ([Nhạc lên], (Âm thanh …), …) stay exactly as written.
+5. Skip page numbers, repeated page headers/footers and watermarks. Ignore logos and decoration; if an image contains text (scan or photo), transcribe that text.
+6. If a word is unreadable write [?] — never guess.
+7. Output ONLY the Markdown: no code fences, no comments, no introduction.`;
+  }
+  async pdf2text(req) {
+    if (req.method !== 'POST') return json({ ok: false }, 405);
+    const bad = await this.aiAuth(req); if (bad) return bad;
+    const key = (this.env && this.env.GEMINI_API_KEY) || await this.st.get('gemini:key');
+    if (!key) return json({ ok: false, loi: 'Chưa có khoá Gemini — vào Khác → 🌐 Dịch kịch bản để dán khoá (miễn phí)' }, 400);
+    const buf = new Uint8Array(await req.arrayBuffer());
+    if (buf.length > PDF_MAX) return json({ ok: false, loi: 'File lớn quá (tối đa 14 MB)' }, 413);
+    if (buf.length < 8 || String.fromCharCode(...buf.subarray(0, 5)) !== '%PDF-') return json({ ok: false, loi: 'File này không phải PDF' }, 400);
+    let bin = ''; for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode.apply(null, buf.subarray(i, i + 0x8000));
+    const body = JSON.stringify({ system_instruction: { parts: [{ text: this.pdfPrompt() }] }, contents: [{ role: 'user', parts: [{ inline_data: { mime_type: 'application/pdf', data: btoa(bin) } }, { text: 'Chép lại toàn bộ kịch bản trong file PDF này thành Markdown theo đúng các quy tắc.' }] }], generationConfig: { thinkingConfig: { thinkingLevel: 'low' } } });
+    bin = '';
+    const models = (await this.st.get('gemini:models')) || ['gemini-3.8-flash', 'gemini-3.6-flash', 'gemini-3.5-flash-lite'];
+    const errs = [];
+    for (const m of models) {
+      try {
+        const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key }, body });
+        const j = await r.json().catch(() => ({}));
+        if (!r.ok) { errs.push(m + ': ' + ((j.error && (j.error.status || j.error.message)) || r.status)); continue; }
+        const c = (j.candidates || [])[0] || {};
+        const md = ((c.content && c.content.parts) || []).filter(x => !x.thought).map(x => x.text || '').join('').replace(/^\s*```(?:markdown|md)?\s*\n/i, '').replace(/\n```\s*$/, '').trim();
+        if (md) return json({ ok: true, md, model: m, partial: c.finishReason === 'MAX_TOKENS' });
+        errs.push(m + ': ' + (c.finishReason || 'trống'));
+      } catch (e) { errs.push(m + ': ' + String(e.message).slice(0, 60)); }
+    }
+    const quota = errs.some(e => /RESOURCE_EXHAUSTED|429|quota/i.test(e));
+    return json({ ok: false, loi: quota ? 'Hết lượt Gemini miễn phí lúc này — thử lại sau ít phút, hoặc chọn “Đọc trên máy”' : 'Gemini không đọc được file: ' + errs.join(' · ').slice(0, 200), detail: errs }, 502);
+  }
+
   // ---- Love Story: Apps Script báo khi dâu rể gửi câu trả lời ----
   async loveStory(req, p, u) {
     if (req.method !== 'POST') return json({ ok: false }, 405);
@@ -378,6 +420,7 @@ ${before || after ? `\nSurrounding script for context only (do NOT translate or 
       if (p === '/translate') return await this.translate(req);
       if (p === '/aikey') return await this.aiKey(req);
       if (p === '/aistatus') return await this.aiStatus(req);
+      if (p === '/pdf2text') return await this.pdf2text(req);
       if (!['/plan', '/devices', '/sub', '/unsub', '/test'].includes(p)) return json({ ok: false, loi: 'Không có đường dẫn này' }, 404);
       if (req.method !== 'POST') return json({ ok: false, loi: 'Sai phương thức' }, 405);
       const q = await req.json().catch(() => ({}));

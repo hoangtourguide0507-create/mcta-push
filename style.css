@@ -1060,3 +1060,29 @@ button{color:inherit}
 :root[data-theme="stage"] .tr-chip.on{background:var(--gold-grad);color:#1a1306}
 :root[data-theme="stage"] .tr-prov{background:#23232f}
 .rte,.rte-view{tab-size:4;-moz-tab-size:4}
+/* V28.14: Nhập / Xuất PDF */
+.notes-head-btns{display:flex;gap:8px;align-items:center}
+.pdf-in-btn{white-space:nowrap}
+.job-script-adds{flex-wrap:wrap}
+.job-script-adds .job-script-add{flex:1 1 30%;min-width:0;white-space:nowrap}
+.pdf-file{display:flex;gap:12px;align-items:center;padding:12px;border:1px solid var(--line);border-radius:16px;margin:4px 0 14px}
+.pdf-file>div{min-width:0;display:flex;flex-direction:column;gap:2px}
+.pdf-file b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pdf-file>div>span{font-size:12px;color:var(--muted)}
+.pdf-ico{flex:none;width:42px;height:50px;border-radius:8px;background:#e5484d;color:#fff;font-weight:900;font-size:12px;display:grid;place-items:center;letter-spacing:.5px}
+.pdf-opts{display:grid;gap:10px}
+.pdf-opt{text-align:left;border:1.5px solid var(--line);background:var(--paper);color:inherit;border-radius:16px;padding:13px 14px;font:inherit;cursor:pointer;display:flex;flex-direction:column;gap:4px}
+.pdf-opt b{font-size:16px}
+.pdf-opt span{font-size:13px;color:var(--muted);line-height:1.4}
+.pdf-opt:active{transform:scale(.985)}
+.pdf-opt:disabled{opacity:.55}
+.pdf-opt.hint{border-color:var(--purple);box-shadow:0 0 0 3px var(--purple-soft)}
+.pdf-status{min-height:20px;margin:12px 2px 0;font-size:14px;line-height:1.45}
+.pdf-status.warn{color:#b45309}
+.pdf-status.err{color:#c2415b}
+.pdf-status .spin{display:inline-block;width:14px;height:14px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;vertical-align:-2px;margin-right:6px;animation:pdfspin .8s linear infinite}
+@keyframes pdfspin{to{transform:rotate(360deg)}}
+.pdf-note{margin-top:10px}
+.pdf-share-bar{position:fixed;left:12px;right:12px;bottom:calc(16px + env(safe-area-inset-bottom));z-index:9999;display:flex;align-items:center;gap:10px;padding:10px 10px 10px 16px;border-radius:18px;background:var(--paper);color:var(--ink);box-shadow:0 12px 40px rgba(0,0,0,.25);border:1px solid var(--line)}
+.pdf-share-bar span{flex:1;font-weight:800}
+.pdf-share-x{border:0;background:none;font-size:22px;color:var(--muted);padding:0 6px;cursor:pointer}

@@ -1,5 +1,5 @@
 
-const APP_VERSION="V28.13";
+const APP_VERSION="V28.14";
 // V28.0: app chạy trên GitHub Pages; dữ liệu + thông báo nằm trên máy chủ Cloudflare riêng (mcta-push).
 const CLOUD_DEFAULT="https://mcta-push.hoangtourguide0507.workers.dev";
 const KEY="freelance_planner_v12";
@@ -774,7 +774,7 @@ notes(){
  const days={"7":7,"30":30,"90":90}[noteRange];if(days)arr=arr.filter(n=>noteTime(n)>=Date.now()-days*86400000);
  arr.sort((a,b)=>{if(noteSort==="az")return (a.title||"").localeCompare(b.title||"","vi");if(noteSort==="show"){const ja=noteJob(a),jb=noteJob(b);return (ja?ja.date+(ja.time||""):"9999").localeCompare(jb?jb.date+(jb.time||""):"9999");}if(noteSort==="created")return (b.createdAt||"").localeCompare(a.createdAt||"");return noteTime(b)-noteTime(a);});
  const chip=(v,l)=>`<button class="filter ${noteFilter===v?"active":""}" onclick="noteFilter='${v}';render()">${l}</button>`;
- return `<div class="section-head"><span class="small"><b>${state.notes.length}</b> kịch bản · ${state.notes.filter(n=>noteJob(n)).length} đã gắn job</span><button class="black-btn" onclick="openNote()">${icon("plus",15)} Viết mới</button></div>
+ return `<div class="section-head"><span class="small"><b>${state.notes.length}</b> kịch bản · ${state.notes.filter(n=>noteJob(n)).length} đã gắn job</span><span class="notes-head-btns"><button class="outline-btn pdf-in-btn" onclick="pdfImport()">📄 Nhập PDF</button><button class="black-btn" onclick="openNote()">${icon("plus",15)} Viết mới</button></span></div>
  <div class="search-wrap"><span>${icon("search",17)}</span><input class="search" id="noteSearchInput" value="${esc(noteSearch)}" placeholder="Tìm tiêu đề, nội dung, tên job…" oninput="noteSearch=this.value;render();const el=document.getElementById('noteSearchInput');el.focus();el.setSelectionRange(el.value.length,el.value.length)"></div>
  <div class="filter-row">${chip("all","Tất cả")}${chip("upcoming","Job sắp diễn ra")}${chip("linked","Đã gắn job")}${chip("free","Chưa gắn job")}</div>
  <div class="note-tools"><select class="field-control" onchange="noteSort=this.value;render()"><option value="edited" ${noteSort==="edited"?"selected":""}>Mới sửa gần đây</option><option value="created" ${noteSort==="created"?"selected":""}>Mới tạo</option><option value="show" ${noteSort==="show"?"selected":""}>Theo ngày diễn ra</option><option value="az" ${noteSort==="az"?"selected":""}>Tên A → Z</option></select><select class="field-control" onchange="noteRange=this.value;render()"><option value="all" ${noteRange==="all"?"selected":""}>Mọi thời gian</option><option value="7" ${noteRange==="7"?"selected":""}>Sửa trong 7 ngày</option><option value="30" ${noteRange==="30"?"selected":""}>Sửa trong 30 ngày</option><option value="90" ${noteRange==="90"?"selected":""}>Sửa trong 90 ngày</option></select></div>
@@ -1082,7 +1082,7 @@ function openJob(id){
  ${(()=>{const ms=jobMeetings(j);const tNow=new Date();tNow.setHours(0,0,0,0);return `<section class="section compact meeting-detail"><div class="section-head"><h3>Lịch họp</h3><button class="text-btn" onclick="openJobForm(state.jobs.find(x=>x.id==='${j.id}'));setTimeout(()=>document.querySelector('.meeting-box')?.scrollIntoView({behavior:'smooth'}),150)">${ms.length?"Cập nhật":"＋ Thêm"}</button></div>${ms.length?ms.map(m=>{const past=new Date(m.date+"T00:00:00")<tNow;const rem=(m.reminders||[]).filter(r=>r.enabled!==false);const href=m.mode==="Online"?safeHref(m.link):"";return `<div class="meeting-card ${past?"past":""}"><div class="meeting-when"><b>${esc(fmtLong(m.date))}${m.time?` • ${esc(m.time)}`:""}</b><span class="meet-mode meet-${m.mode==="Online"?"on":"off"}">${esc(m.mode)}</span></div><div class="meeting-where">${icon(m.mode==="Online"?"link":"pin",13)} ${esc(meetingWhere(m))}</div>${m.note?`<div class="small">${esc(m.note)}</div>`:""}<div class="meeting-actions">${m.mode==="Online"&&href?`<a class="map-link" href="${esc(href)}" target="_blank" rel="noopener">${icon("link",14)} Mở link họp</a>`:""}${m.mode!=="Online"&&m.place?`<a class="map-link" href="${esc(directionsUrl(m.place))}" target="_blank" rel="noopener">${icon("pin",14)} Chỉ đường</a><button type="button" class="map-link link-btn" onclick="copyText(this.dataset.q,this)" data-q="${esc(m.place)}">Copy địa chỉ</button>`:""}</div><div class="push-status small"><span class="push-dot ${rem.length?"on":""}"></span>${past?"Đã qua":rem.length?"Nhắc "+rem.map(x=>`trước ${labelMinutes(x.minutes)}`).join(" • "):"Không nhắc"}</div></div>`}).join(""):'<div class="empty">Chưa có lịch họp.</div>'}</section>`})()}
  <section class="section compact script-detail-section"><div class="section-head"><h3>Kịch bản</h3>${workNeedsAttention(j)?`<span class="work-mini warn">${esc(workLabel(j))}</span>`:`<span class="work-mini ok">${j.noScript&&!linkedNotes(j).length?"Không cần kịch bản":"Đã đủ"}</span>`}</div>
  <div class="job-scripts">${linkedNotes(j).sort((a,b)=>noteTime(b)-noteTime(a)).map(n=>`<div class="job-script-row"><div><b>${noteKind(n)==="lovestory"?'<i class="ls-tag">Love Story</i> ':""}${esc(n.title||"(Không tiêu đề)")}</b><span>${noteTime(n)?`Sửa ${esc(relTime(noteTime(n)))}`:"&nbsp;"}</span></div><button class="rd-btn" onclick="closeModal();openReader('${n.id}')">Đọc</button><button class="rd-btn" onclick="openJobAfterNote=true;openNote(state.notes.find(x=>x.id==='${n.id}'))">Sửa</button></div>`).join("")}
- <div class="job-script-adds"><button class="outline-btn job-script-add" onclick="openJobAfterNote=true;openNote(null,{jobId:'${j.id}'})">＋ Viết kịch bản</button>${isWedding(j)?`<button class="outline-btn job-script-add" onclick="openJobAfterNote=true;openNote(null,{jobId:'${j.id}',kind:'lovestory'})">＋ Viết Love Story</button>`:""}</div>
+ <div class="job-script-adds"><button class="outline-btn job-script-add" onclick="openJobAfterNote=true;openNote(null,{jobId:'${j.id}'})">＋ Viết kịch bản</button><button class="outline-btn job-script-add" onclick="pdfImport('${j.id}')">📄 Nhập PDF</button>${isWedding(j)?`<button class="outline-btn job-script-add" onclick="openJobAfterNote=true;openNote(null,{jobId:'${j.id}',kind:'lovestory'})">＋ Viết Love Story</button>`:""}</div>
  ${(j.scriptLink||j.scriptNotes||j.loveStoryLink||j.loveStoryNotes)?`<details class="legacy-script"><summary>Link / ghi chú nhập trước đây</summary>${j.scriptLink?`<a class="script-link" href="${esc(safeHref(j.scriptLink)||"#")}" target="_blank" rel="noopener">${icon("link",14)} File kịch bản</a>`:""}${j.scriptNotes?`<div class="note-body script-note">${esc(j.scriptNotes)}</div>`:""}${j.loveStoryLink?`<a class="script-link" href="${esc(safeHref(j.loveStoryLink)||"#")}" target="_blank" rel="noopener">${icon("link",14)} File Love Story</a>`:""}${j.loveStoryNotes?`<div class="note-body script-note"><b>Love Story:</b> ${esc(j.loveStoryNotes)}</div>`:""}</details>`:""}
  </div></section>
  ${isWedding(j)||j.lsCode?`<section class="section compact ls-section"><div class="section-head"><h3>💌 Love Story</h3>${j.lsCode?`<button class="text-btn" onclick="LS.at=0;hydrateLoveStory(state.jobs.find(x=>x.id==='${j.id}'))">Làm mới</button>`:""}</div><div id="lsWrap"></div></section>`:""}
@@ -1123,7 +1123,7 @@ var noteSearch="",noteFilter="all",noteSort="edited",noteRange="all",noteDirty=f
 function noteJob(n){return n&&n.jobId?state.jobs.find(j=>j.id===n.jobId):null;}
 function noteTime(n){return Date.parse(n.updatedAt||"")||n._u||Date.parse(n.createdAt||"")||0;}
 function relTime(t){if(!t)return"";const d=(Date.now()-t)/60000;if(d<1)return"vừa xong";if(d<60)return`${Math.floor(d)} phút trước`;if(d<1440)return`${Math.floor(d/60)} giờ trước`;if(d<43200)return`${Math.floor(d/1440)} ngày trước`;const x=new Date(t);return`${pad2(x.getDate())}/${pad2(x.getMonth()+1)}/${x.getFullYear()}`;}
-function noteCard(n){const jj=noteJob(n);return `<article class="note-card"><button class="note-open" onclick="openReader('${n.id}')">${jj?`<span class="note-job">${icon("jobs",12)} ${esc(jj.title)} · ${esc(shortDate(jj.date))}</span>`:""}<h3>${noteKind(n)==="lovestory"?'<i class="ls-tag">Love Story</i> ':""}${esc(n.title||"(Không tiêu đề)")}</h3><div class="note-preview">${esc(n.body)}</div>${noteTime(n)?`<span class="note-time">Sửa ${esc(relTime(noteTime(n)))}</span>`:""}</button><div class="note-actions"><button class="note-act read" onclick="openReader('${n.id}')">Đọc</button><button class="note-act" onclick="openNote(state.notes.find(x=>x.id==='${n.id}'))">Sửa</button><button class="note-act" onclick="exportNoteDocx('${n.id}')">Word</button><button class="note-act del" onclick="deleteNote('${n.id}')">Xoá</button></div></article>`;}
+function noteCard(n){const jj=noteJob(n);return `<article class="note-card"><button class="note-open" onclick="openReader('${n.id}')">${jj?`<span class="note-job">${icon("jobs",12)} ${esc(jj.title)} · ${esc(shortDate(jj.date))}</span>`:""}<h3>${noteKind(n)==="lovestory"?'<i class="ls-tag">Love Story</i> ':""}${esc(n.title||"(Không tiêu đề)")}</h3><div class="note-preview">${esc(n.body)}</div>${noteTime(n)?`<span class="note-time">Sửa ${esc(relTime(noteTime(n)))}</span>`:""}</button><div class="note-actions"><button class="note-act read" onclick="openReader('${n.id}')">Đọc</button><button class="note-act" onclick="openNote(state.notes.find(x=>x.id==='${n.id}'))">Sửa</button><button class="note-act" onclick="exportNoteDocx('${n.id}')">Word</button><button class="note-act" onclick="exportNotePdf('${n.id}')">PDF</button><button class="note-act del" onclick="deleteNote('${n.id}')">Xoá</button></div></article>`;}
 function noteJobOptions(sel){const now=state.jobs.filter(isNotOver).sort(byStart),past=state.jobs.filter(j=>!isNotOver(j)).sort((a,b)=>byStart(b,a)).slice(0,60);const o=j=>`<option value="${j.id}" ${sel===j.id?"selected":""}>${esc(shortDate(j.date))} · ${esc(j.title)}</option>`;const cur=sel&&!now.concat(past).some(j=>j.id===sel)&&state.jobs.find(j=>j.id===sel);return `<option value="">— Không gắn job —</option>${cur?o(cur):""}${now.length?`<optgroup label="Sắp diễn ra">${now.map(o).join("")}</optgroup>`:""}${past.length?`<optgroup label="Đã qua">${past.map(o).join("")}</optgroup>`:""}`;}
 function editorSize(d){const p=readerPrefs();p.edit=Math.max(14,Math.min(34,(p.edit||19)+d));saveReaderPrefs(p);const t=document.getElementById("noteBody");if(t)t.style.fontSize=p.edit+"px";}
 // ---- V23.5: soạn thảo định dạng + hoàn tác (chạy hoàn toàn trên máy) ----
@@ -1227,7 +1227,7 @@ document.addEventListener("keydown",e=>{if(!rteEl()||!document.activeElement||do
 function openNote(existing=null,opts={}){
   let n=existing||{id:"",title:"",body:"",jobId:opts.jobId||"",kind:opts.kind||"script"};const p=readerPrefs();noteDirty=false;
   // Còn bản nháp chưa lưu (app bị đóng / tải lại giữa chừng) → hỏi khôi phục
-  const dr=noteDraftGet(n.id);let restored=false;
+  const dr=opts.fresh?null:noteDraftGet(n.id);let restored=false;
   if(dr&&dr.html!==noteHtml(n)&&(!n.updatedAt||dr.at>Date.parse(n.updatedAt))&&confirm(`Có bản nháp chưa lưu (${relTime(dr.at)}) của kịch bản này. Mở bản nháp?`)){n={...n,title:dr.title||n.title,html:dr.html,jobId:dr.jobId??n.jobId,kind:dr.kind||n.kind};restored=true;}else if(dr)noteDraftClear(n.id);
   const tb=(cmd,label,title,cls="")=>`<button type="button" class="tb ${cls}" data-cmd="${cmd}" onclick="${cmd}" title="${title}" aria-label="${title}">${label}</button>`;
   openModal(`<form class="note-editor" data-id="${esc(n.id)}" onsubmit="saveNote(event)" oninput="noteDirty=true;noteDraftSoon();noteAutoSoon()" onchange="noteDirty=true;noteDraftSoon();noteAutoSoon()">
@@ -1248,7 +1248,7 @@ function openNote(existing=null,opts={}){
     </div>
     <div class="ne-stat" id="neStat"></div>
    </div>
-   <div class="ne-actions">${n.id?`<button type="button" class="outline-btn danger-text" onclick="deleteNote('${n.id}',true)">Xoá</button><button type="button" class="outline-btn" onclick="saveNoteThenRead('${n.id}')">Đọc</button><button type="button" class="outline-btn" onclick="saveNoteThenExport('${n.id}')">Word</button>`:""}<button class="black-btn submit">Lưu kịch bản</button></div>
+   <div class="ne-actions">${n.id?`<button type="button" class="outline-btn danger-text" onclick="deleteNote('${n.id}',true)">Xoá</button><button type="button" class="outline-btn" onclick="saveNoteThenRead('${n.id}')">Đọc</button><button type="button" class="outline-btn" onclick="saveNoteThenExport('${n.id}')">Word</button><button type="button" class="outline-btn" onclick="saveNoteThenPdf('${n.id}')">PDF</button>`:""}<button class="black-btn submit">Lưu kịch bản</button></div>
   </form>`);
   document.getElementById("modal").classList.add("editor-mode");
   rteInit();fitEditor();rteStat();if(restored){noteDirty=true;noteAutoSave();showToast("Đã khôi phục và lưu bản nháp ✓");}
@@ -1502,6 +1502,216 @@ async function exportNoteDocx(id){
   const a=document.createElement("a");a.href=URL.createObjectURL(file);a.download=file.name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},1500);showToast("Đã xuất file Word ✓");
 }
 function saveNoteThenExport(id){const f=document.querySelector("#modalCard form.note-editor");if(noteDirty&&f){f.requestSubmit();setTimeout(()=>exportNoteDocx(id),200);}else exportNoteDocx(id);}
+// ---- V28.14: Nhập PDF (đọc kịch bản khách gửi) & Xuất PDF ----
+// Đọc trên máy bằng pdf.js (miễn phí, không gửi đi đâu). PDF scan / ảnh chụp → Gemini đọc (khoá miễn phí ở mục Dịch kịch bản).
+// Xuất PDF bằng pdf-lib + phông Be Vietnam Pro (đủ dấu tiếng Việt). Thư viện chỉ tải khi bấm, sau đó dùng được cả khi offline.
+const PDF_MAX_MB=14;
+const vendorLoads={};
+function loadVendor(src,globalName){if(window[globalName])return Promise.resolve(window[globalName]);
+  if(!vendorLoads[src])vendorLoads[src]=new Promise((ok,no)=>{const s=document.createElement("script");s.src=src+"?v="+APP_VERSION;s.async=true;s.onload=()=>window[globalName]?ok(window[globalName]):no(new Error("Không tải được "+src));s.onerror=()=>{delete vendorLoads[src];no(new Error("Không tải được thư viện — kiểm tra mạng rồi thử lại"));};document.head.appendChild(s);});
+  return vendorLoads[src];}
+let pdfPick=null;
+function pdfImport(jobId=""){
+  const inp=document.createElement("input");inp.type="file";inp.accept="application/pdf,.pdf";inp.style.display="none";
+  inp.onchange=()=>{const f=inp.files&&inp.files[0];inp.remove();if(f)pdfImportSheet(f,jobId);};
+  document.body.appendChild(inp);inp.click();
+}
+function pdfTitleOf(name){return String(name||"").replace(/\.pdf$/i,"").replace(/[_]+/g," ").replace(/\s+/g," ").trim().slice(0,90)||"Kịch bản từ PDF";}
+function fmtBytes(b){return b>=1048576?(b/1048576).toFixed(1).replace(".",",")+" MB":Math.max(1,Math.round(b/1024))+" KB";}
+function pdfImportSheet(file,jobId){
+  if(!/pdf$/i.test(file.type||"")&&!/\.pdf$/i.test(file.name||"")){alert("File này không phải PDF.");return;}
+  if(file.size>PDF_MAX_MB*1048576){alert(`File lớn quá (${fmtBytes(file.size)}). Tối đa ${PDF_MAX_MB} MB.`);return;}
+  pdfPick={file,jobId,busy:false};
+  openModal(`<div class="sheet-head"><div><div class="eyebrow">NHẬP PDF</div><h2>Đọc kịch bản từ PDF</h2></div><button class="close" onclick="pdfCancel()">×</button></div>
+   <div class="pdf-file"><span class="pdf-ico">PDF</span><div><b>${esc(file.name||"kich-ban.pdf")}</b><span>${fmtBytes(file.size)}${jobId&&state.jobs.find(j=>j.id===jobId)?` · gắn vào ${esc(state.jobs.find(j=>j.id===jobId).title)}`:""}</span></div></div>
+   <div class="pdf-opts">
+    <button type="button" class="pdf-opt" id="pdfOptLocal" onclick="pdfRun('local')"><b>⚡ Đọc trên máy</b><span>Vài giây, không cần mạng, file không gửi đi đâu. Hợp với PDF xuất từ Word / Google Docs.</span></button>
+    <button type="button" class="pdf-opt" id="pdfOptAi" onclick="pdfRun('ai')"><b>✨ Gemini đọc</b><span>Giữ tiêu đề, in đậm, danh sách, bảng; đọc được cả bản scan / ảnh chụp. Mất 10–60 giây, nội dung được gửi tới Google.</span></button>
+   </div>
+   <div class="pdf-status" id="pdfStatus" aria-live="polite"></div>
+   <p class="small pdf-note">Nội dung được chuyển thành kịch bản mới để sửa như bình thường (định dạng, Tab, dịch, xuất Word / PDF). File PDF gốc giữ nguyên.</p>`);
+}
+function pdfCancel(){if(pdfPick)pdfPick.cancel=true;pdfPick=null;closeModal();}
+function pdfStatus(html,kind=""){const el=document.getElementById("pdfStatus");if(el){el.className="pdf-status"+(kind?" "+kind:"");el.innerHTML=html;}}
+async function pdfRun(mode){
+  const P=pdfPick;if(!P||P.busy)return;P.busy=true;document.querySelectorAll(".pdf-opt").forEach(b=>b.disabled=true);
+  const done=()=>{P.busy=false;document.querySelectorAll(".pdf-opt").forEach(b=>b.disabled=false);};
+  try{
+    let html="",pages=0,via="";
+    if(mode==="local"){
+      pdfStatus('<span class="spin"></span> Đang mở file…');
+      const r=await pdfReadLocal(await P.file.arrayBuffer(),(i,n)=>pdfStatus(`<span class="spin"></span> Đang đọc trang ${i}/${n}…`));
+      if(P.cancel)return;pages=r.pages;
+      if(r.chars<20){done();pdfStatus(`Không thấy chữ trong file (${r.pages} trang) — có thể là bản scan hoặc ảnh chụp.<br><b>Bấm ✨ Gemini đọc</b> để đọc chữ trong ảnh.`,"warn");document.getElementById("pdfOptAi")?.classList.add("hint");return;}
+      html=r.html;via="máy";
+    }else{
+      pdfStatus('<span class="spin"></span> Gemini đang đọc file… (10–60 giây, đừng thoát app)');
+      const r=await pdfReadGemini(P.file);if(P.cancel)return;
+      html=sanitizeHtml(mdToHtml(r.md));via="Gemini";
+      if(r.partial)showToast("File dài — Gemini chỉ đọc được phần đầu, kiểm tra phần cuối nhé");
+    }
+    if(!htmlToText(html).trim()){done();pdfStatus("Không đọc được nội dung từ file này.","warn");return;}
+    pdfPick=null;closeModal();
+    if(P.jobId)openJobAfterNote=true;
+    openNote({id:"",title:pdfTitleOf(P.file.name),html,jobId:P.jobId||"",kind:"script"},{fresh:true});
+    noteDirty=true;noteAutoSoon();
+    showToast(`Đã nhập ${pages?pages+" trang ":""}bằng ${via} ✓ — xem lại nội dung nhé`);
+  }catch(e){done();pdfStatus(esc(e&&e.message||"Lỗi đọc PDF"),"err");}
+}
+async function pdfReadGemini(file){
+  if(!accessKey())throw new Error("Chưa kết nối máy chủ — vào Khác → Đồng bộ để nhập mã truy cập.");
+  let r;try{r=await fetch(cloudUrl()+"/pdf2text",{method:"POST",headers:{"Content-Type":"application/pdf","x-app-key":accessKey()},body:file});}
+  catch(_){throw new Error("Không kết nối được máy chủ — kiểm tra mạng rồi thử lại.");}
+  const j=await r.json().catch(()=>({}));
+  if(!r.ok||!j.ok||!j.md)throw new Error(j.loi||"Gemini không đọc được file này.");
+  return j;
+}
+// Đọc chữ trên máy: gom chữ thành dòng → ghép dòng thành đoạn; nhận tiêu đề (chữ to), in đậm/nghiêng (theo tên phông), gạch đầu dòng, căn giữa; bỏ số trang & header/footer lặp lại.
+async function pdfReadLocal(buf,onProg){
+  const lib=await loadVendor("vendor/pdf.min.js","pdfjsLib");
+  lib.GlobalWorkerOptions.workerSrc=new URL("vendor/pdf.worker.min.js?v="+APP_VERSION,location.href).href;
+  let doc;try{doc=await lib.getDocument({data:new Uint8Array(buf),isEvalSupported:false,disableFontFace:true}).promise;}
+  catch(e){throw new Error(/password/i.test(e&&e.name||"")||/password/i.test(e&&e.message||"")?"File PDF có mật khẩu — nhờ khách gửi bản không khoá.":"Không mở được file PDF này.");}
+  const pageLines=[];let chars=0;
+  for(let p=1;p<=doc.numPages;p++){onProg&&onProg(p,doc.numPages);
+    const page=await doc.getPage(p),vp=page.getViewport({scale:1});
+    const tc=await page.getTextContent();
+    try{await page.getOperatorList();}catch(_){}   // nạp phông để biết đậm / nghiêng
+    const fontOf=id=>{try{return page.commonObjs.has(id)?page.commonObjs.get(id):null;}catch(_){return null;}};
+    const items=tc.items.filter(it=>it.str!==undefined&&(it.str.trim()||it.width>0)).map(it=>{
+      const t=it.transform,size=Math.hypot(t[2],t[3])||it.height||10,f=fontOf(it.fontName)||{},nm=String(f.name||f.loadedName||"")+" "+String((tc.styles[it.fontName]||{}).fontFamily||"");
+      return {s:it.str,x:t[4],y:t[5],w:it.width,size,b:!!(f.bold||f.black||/bold|black|heavy|semibold|demi/i.test(nm)),i:!!(f.italic||/italic|oblique/i.test(nm))};});
+    // gom theo dòng (cùng toạ độ y)
+    items.sort((a,b)=>b.y-a.y||a.x-b.x);const lines=[];
+    for(const it of items){const L=lines.find(l=>Math.abs(l.y-it.y)<Math.max(2,Math.min(l.size,it.size)*0.45));if(L){L.items.push(it);L.size=Math.max(L.size,it.size);}else lines.push({y:it.y,size:it.size,items:[it]});}
+    lines.sort((a,b)=>b.y-a.y);
+    for(const L of lines){L.items.sort((a,b)=>a.x-b.x);const runs=[];let endX=null;
+      for(const it of L.items){let s=it.s;
+        if(endX!==null){const gap=it.x-endX;if(gap>L.size*2.2)s="\t"+s.replace(/^\s+/,"");else if(gap>L.size*0.18&&!/\s$/.test(runs.length?runs[runs.length-1].t:"")&&!/^\s/.test(s))s=" "+s;}
+        const last=runs[runs.length-1];if(last&&last.b===it.b&&last.i===it.i)last.t+=s;else runs.push({t:s,b:it.b,i:it.i});
+        endX=it.x+it.w;}
+      L.x0=L.items[0].x;L.x1=endX;L.runs=runs;L.text=runs.map(r=>r.t).join("").replace(/\s+$/,"");chars+=L.text.replace(/\s/g,"").length;}
+    pageLines.push({w:vp.width,h:vp.height,lines:lines.filter(l=>l.text.trim())});
+  }
+  try{doc.destroy();}catch(_){}
+  // header / footer lặp lại trên nhiều trang, số trang
+  const norm=t=>t.replace(/\d+/g,"#").replace(/\s+/g," ").trim().toLowerCase();
+  const edgeCount={};if(pageLines.length>=3)pageLines.forEach(pg=>{const seen=new Set();pg.lines.forEach(l=>{if(l.y>pg.h*0.9||l.y<pg.h*0.1){const k=norm(l.text);if(!seen.has(k)){seen.add(k);edgeCount[k]=(edgeCount[k]||0)+1;}}});});
+  const isJunk=(l,pg)=>{const edge=l.y>pg.h*0.9||l.y<pg.h*0.1,t=l.text.trim();
+    if(edge&&/^(trang|page)?\s*\d+\s*((\/|of|trên)\s*\d+)?$/i.test(t))return true;
+    if(edge&&/^[-–—]?\s*\d+\s*[-–—]?$/.test(t))return true;
+    return edge&&pageLines.length>=3&&edgeCount[norm(t)]>=Math.max(3,pageLines.length*0.5);};
+  const all=[];pageLines.forEach(pg=>pg.lines.forEach(l=>{if(!isJunk(l,pg))all.push({...l,pw:pg.w,ph:pg.h});}));
+  if(!all.length)return {html:"",pages:pageLines.length,chars};
+  // cỡ chữ thân bài = cỡ phổ biến nhất (tính theo số ký tự)
+  const sz={};all.forEach(l=>{const k=Math.round(l.size*2)/2;sz[k]=(sz[k]||0)+l.text.length;});
+  const body=+Object.entries(sz).sort((a,b)=>b[1]-a[1])[0][0];
+  const leftM=Math.min(...all.map(l=>l.x0)),rightM=Math.max(...all.map(l=>l.x1));
+  const BUL=/^\s*([•●▪■◦○►▶✓✔❖◆◇➢➤\-–—*·]|[-])\s*/,NUM=/^\s*(\d{1,2}[.)]|[a-z][.)])\s+/i;
+  const out=[];let para=null,prev=null,list=null;
+  const esc2=t=>esc(t);
+  const runsHtml=runs=>runs.map(r=>{let h=esc2(r.t);if(!h)return "";if(r.i)h=`<i>${h}</i>`;if(r.b)h=`<b>${h}</b>`;return h;}).join("");
+  const flush=()=>{if(!para)return;const inner=runsHtml(para.runs).replace(/\s+$/,"")||"<br>";
+    if(para.kind==="h")out.push(`${list?`</${list}>`:""}<h3>${runsHtml(para.runs.map(r=>({...r,b:false}))).replace(/\s+$/,"")}</h3>`),list=null;
+    else if(para.kind==="li"){if(list!==para.lt){if(list)out.push(`</${list}>`);out.push(`<${para.lt}>`);list=para.lt;}out.push(`<li>${inner}</li>`);}
+    else{if(list){out.push(`</${list}>`);list=null;}out.push(`<div${para.center?' style="text-align: center;"':""}>${inner}</div>`);}
+    para=null;};
+  for(const l of all){
+    const gap=prev&&prev.ph===l.ph&&prev.y>l.y?(prev.y-l.y):null;   // khoảng cách dòng (cùng trang)
+    const big=l.size>=body*1.18&&l.text.length<=90;
+    const allBold=l.runs.every(r=>r.b||!r.t.trim());
+    const mid=(l.x0+l.x1)/2,center=Math.abs(mid-l.pw/2)<l.pw*0.04&&(l.x0-leftM)>l.pw*0.08&&(l.x1-l.x0)<(rightM-leftM)*0.8;
+    let runs=l.runs.map(r=>({...r}));let kind="p",lt="";
+    const mB=l.text.match(BUL),mN=!mB&&l.text.match(NUM);
+    if(mB&&l.text.replace(BUL,"").trim()&&!/^\s*[-–—]\s*\d/.test(l.text)){kind="li";lt="ul";let cut=mB[0].length;while(cut>0&&runs.length){const r=runs[0],k=Math.min(cut,r.t.length);r.t=r.t.slice(k);cut-=k;if(!r.t)runs.shift();}}
+    else if(big||(allBold&&l.text.length<=60&&gap!==null&&gap>body*1.9))kind=big?"h":"p";
+    // ghép vào đoạn trước nếu là dòng bị xuống hàng tự động
+    const cont=para&&para.kind!=="h"&&kind==="p"&&!mN&&gap!==null&&gap<l.size*1.75&&Math.abs(l.size-prev.size)<0.6&&prev.x1>=leftM+(rightM-leftM)*0.82&&!center&&!para.center&&!/[:：]$/.test(prev.text)&&!/^\s*\d{1,2}[:h]\d{2}/.test(l.text);
+    const indentCont=para&&para.kind==="li"&&kind==="p"&&!mN&&gap!==null&&gap<l.size*1.75&&l.x0>prev.x0-1&&prev.x1>=leftM+(rightM-leftM)*0.75;
+    if(cont||indentCont){const last=para.runs[para.runs.length-1];const sep=/[-‐]$/.test(last?last.t:"")?"":" ";if(runs[0])runs[0].t=sep+runs[0].t.replace(/^\s+/,"");para.runs.push(...runs);}
+    else{flush();if(gap!==null&&gap>Math.max(l.size,prev.size)*2.1&&out.length&&kind!=="h")out.push((list?`</${list}>`:"")+"<div><br></div>"),list=null;
+      para={kind,lt,runs,center:kind==="p"&&center};}
+    prev=l;}
+  flush();if(list)out.push(`</${list}>`);
+  return {html:sanitizeHtml(out.join("").replace(/(<div><br><\/div>){2,}/g,"<div><br></div>")),pages:pageLines.length,chars};
+}
+
+// ---- Xuất PDF (A4, chữ thật — bôi đen / tìm kiếm được) ----
+async function buildNotePdf(n){
+  const [PL,fk]=await Promise.all([loadVendor("vendor/pdf-lib.min.js","PDFLib"),loadVendor("vendor/fontkit.umd.min.js","fontkit")]);
+  const fontBytes=await Promise.all(["Regular","Bold","Italic","BoldItalic"].map(async k=>{const r=await fetch(`vendor/fonts/BeVietnamPro-${k}.ttf?v=${APP_VERSION}`);if(!r.ok)throw new Error("Không tải được phông chữ");return r.arrayBuffer();}));
+  const pdf=await PL.PDFDocument.create();pdf.registerFontkit(fk);
+  const F={};[F.r,F.b,F.i,F.bi]=await Promise.all(fontBytes.map(b=>pdf.embedFont(b,{subset:true})));
+  pdf.setTitle(n.title||"Kịch bản");pdf.setCreator(state.settings.appName||"MC Thiên Ân Planner");pdf.setProducer("MC Thiên Ân Planner");
+  const W=595.28,H=841.89,M=56.7,CW=W-2*M,TAB=36,BASE=13;
+  const rgb=h=>{const m=/^#?([0-9a-f]{6})$/i.exec(String(h||""));if(!m)return PL.rgb(0.07,0.07,0.09);const v=parseInt(m[1],16);return PL.rgb((v>>16&255)/255,(v>>8&255)/255,(v&255)/255);};
+  const fontFor=r=>r.b&&r.i?F.bi:r.b?F.b:r.i?F.i:F.r;
+  const hasG=(f,cp)=>{try{return f.embedder.font.hasGlyphForCodePoint(cp);}catch(_){return true;}};
+  const clean=(f,t)=>{let o="";for(const ch of String(t).normalize("NFC")){const cp=ch.codePointAt(0);if(ch==="\t"||hasG(f,cp))o+=ch;else if(/[‘’]/.test(ch))o+="'";else if(/[“”]/.test(ch))o+='"';else if(cp>=0x2190&&cp<=0x21ff||cp>=0x2794&&cp<=0x27bf)o+=(cp===0x2190||cp===0x21d0)?"<-":"->";else if(cp>=0x25a0&&cp<=0x25cf||cp===0x2605||cp===0x2606||cp===0x2219)o+="•";else if(cp>=0x2000&&cp<=0x200f||cp===0xa0)o+=" ";}return o;};
+  let page=null,y=0;const pages=[];
+  const newPage=()=>{page=pdf.addPage([W,H]);pages.push(page);y=H-M;};
+  newPage();
+  // dàn trang một đoạn: runs → token (chữ / khoảng trắng / tab) → dòng
+  const layout=(runs,size,x0,width,firstX=x0)=>{const toks=[];
+    for(const r of runs){const f=fontFor(r),t=clean(f,r.t);for(const p of t.split(/(\t| +)/)){if(!p)continue;toks.push({t:p,r,f,tab:p==="\t",sp:/^ +$/.test(p),w:p==="\t"?0:f.widthOfTextAtSize(p,size)});}}
+    const lines=[];let cur=[],x=firstX;
+    const push=()=>{while(cur.length&&cur[cur.length-1].sp)cur.pop();lines.push(cur);cur=[];x=x0;};
+    for(let tk of toks){
+      if(tk.tab){const nx=x0+(Math.floor((x-x0)/TAB+1e-6)+1)*TAB;if(nx>x0+width){push();continue;}cur.push({...tk,x,w:nx-x});x=nx;continue;}
+      if(tk.sp&&!cur.length&&lines.length)continue;
+      if(x+tk.w>x0+width+0.01&&cur.length&&!tk.sp){push();}
+      if(tk.sp&&x+tk.w>x0+width){push();continue;}
+      if(tk.w>width){let s="";for(const ch of tk.t){const w=tk.f.widthOfTextAtSize(s+ch,size);if(x+w>x0+width&&s){cur.push({...tk,t:s,x,w:tk.f.widthOfTextAtSize(s,size)});push();s="";}s+=ch;}tk={...tk,t:s,w:tk.f.widthOfTextAtSize(s,size)};}
+      cur.push({...tk,x});x+=tk.w;}
+    if(cur.length||!lines.length)push();return lines;};
+  const drawLines=(lines,size,lh,align,x0,width,before)=>{
+    lines.forEach((ln,li)=>{if(y-lh<M){newPage();}else if(li===0&&before)y-=0;
+      const used=ln.length?ln[ln.length-1].x+ln[ln.length-1].w-ln[0].x:0;let dx=0;
+      if(align==="center")dx=(width-used)/2-(ln.length?ln[0].x-x0:0);else if(align==="right")dx=width-used-(ln.length?ln[0].x-x0:0);
+      const base=y-size;
+      for(const tk of ln){if(tk.tab)continue;const X=tk.x+dx;
+        if(tk.r.h){page.drawRectangle({x:X,y:base-size*0.22,width:tk.w,height:size*1.18,color:rgb(tk.r.h)});}
+        if(!tk.sp)page.drawText(tk.t,{x:X,y:base,size,font:tk.f,color:rgb(tk.r.c)});
+        if(tk.r.u)page.drawLine({start:{x:X,y:base-size*0.12},end:{x:X+tk.w,y:base-size*0.12},thickness:size*0.06,color:rgb(tk.r.c)});
+        if(tk.r.s)page.drawLine({start:{x:X,y:base+size*0.3},end:{x:X+tk.w,y:base+size*0.3},thickness:size*0.06,color:rgb(tk.r.c)});}
+      y-=lh;});};
+  const block=(runs,{size=BASE,lh=size*1.45,align="",before=0,after=6,x0=M,width=CW,firstX}={})=>{
+    if(before){y-=before;if(y-lh<M)newPage();}
+    drawLines(layout(runs,size,x0,width,firstX),size,lh,align,x0,width,before);y-=after;};
+  // tiêu đề + thông tin job
+  const j=noteJob(n);
+  block([{t:n.title||"Kịch bản",b:1}],{size:20,lh:26,after:j?4:14});
+  if(j)block([{t:[j.title,fmtLong(j.date)+(j.time?` • ${j.time}`:""),j.locationName||j.location].filter(Boolean).join("  ·  "),c:"6B7280"}],{size:10.5,lh:15,after:16});
+  const al=a=>a==="center"?"center":a==="right"?"right":"";
+  for(const pa of htmlToParas(noteHtml(n))){
+    if(pa.st==="hr"){y-=6;if(y-8<M)newPage();page.drawLine({start:{x:M,y},end:{x:W-M,y},thickness:0.8,color:PL.rgb(0.61,0.64,0.69)});y-=12;continue;}
+    if(pa.st==="h"){if(y-60<M)newPage();block(pa.runs.map(r=>({...r,b:1})),{size:15,lh:21,before:10,after:5,align:al(pa.al)});continue;}
+    if(pa.st==="li"){const lab=(pa.num?pa.num+".":"•"),IND=28.35,HANG=17;
+      const startY=y,lines=layout(pa.runs,BASE,M+IND,CW-IND);const lh=BASE*1.45;
+      if(y-lh<M)newPage();
+      page.drawText(clean(F.r,lab),{x:M+IND-HANG,y:y-BASE,size:BASE,font:F.r,color:rgb(pa.runs[0]&&pa.runs[0].c)});
+      drawLines(lines,BASE,lh,al(pa.al),M+IND,CW-IND);y-=4;continue;}
+    if(!pa.runs.length||!pa.runs.some(r=>String(r.t).trim())){y-=BASE*1.1;if(y<M)newPage();continue;}
+    block(pa.runs,{align:al(pa.al)});
+  }
+  // số trang
+  const N=pages.length;pages.forEach((pg,i)=>{const t=`${i+1} / ${N}`;pg.drawText(t,{x:W/2-F.r.widthOfTextAtSize(t,9)/2,y:M/2-3,size:9,font:F.r,color:PL.rgb(0.6,0.62,0.66)});});
+  return new Blob([await pdf.save()],{type:"application/pdf"});
+}
+async function exportNotePdf(id){
+  const n=state.notes.find(x=>x.id===id);if(!n)return;
+  showToast("Đang tạo PDF…");
+  let blob;try{blob=await buildNotePdf(n);}catch(e){alert("Không tạo được file PDF: "+(e&&e.message||e));return;}
+  const file=new File([blob],docxName(n).replace(/\.docx$/,".pdf"),{type:"application/pdf"});
+  try{if(navigator.canShare&&navigator.canShare({files:[file]})){await navigator.share({files:[file],title:n.title||"Kịch bản"});return;}}catch(e){if(e&&e.name==="AbortError")return;if(e&&e.name==="NotAllowedError"){pdfShareBar(file,n.title);return;}}
+  const a=document.createElement("a");a.href=URL.createObjectURL(file);a.download=file.name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},1500);showToast("Đã xuất file PDF ✓");
+}
+// iPhone chỉ cho mở bảng Chia sẻ ngay sau một lần chạm; tạo PDF lâu quá thì hiện nút để chạm lại.
+function pdfShareBar(file,title){document.getElementById("pdfShareBar")?.remove();const d=document.createElement("div");d.id="pdfShareBar";d.className="pdf-share-bar";
+  d.innerHTML=`<span>PDF đã sẵn sàng</span><button type="button" class="black-btn">📤 Gửi / Lưu PDF</button><button type="button" class="pdf-share-x" aria-label="Đóng">×</button>`;
+  d.querySelector(".black-btn").onclick=async()=>{try{await navigator.share({files:[file],title:title||"Kịch bản"});}catch(e){if(!e||e.name!=="AbortError")alert("Không mở được bảng chia sẻ: "+(e&&e.message||e));}d.remove();};
+  d.querySelector(".pdf-share-x").onclick=()=>d.remove();document.body.appendChild(d);setTimeout(()=>d.remove(),60000);}
+function saveNoteThenPdf(id){const f=document.querySelector("#modalCard form.note-editor");if(noteDirty&&f){noteAutoSave();}exportNotePdf(id);}
 function saveNote(e){e.preventDefault();clearTimeout(noteDraftTimer);clearTimeout(noteAutoTimer);const f=e.target,had=!!f.dataset.id;const id=persistNote(f);noteDirty=false;if(id)save();const jid=f.elements.jobId?.value;closeModal();render();if(id&&(page==="notes"||!had))showToast("Đã lưu kịch bản ✓");if(openJobAfterNote&&jid){openJobAfterNote=false;openJob(jid);}}
 // ---- V28.4: tự động lưu kịch bản ----
 // Gõ xong ~1,5 giây là lưu vào app và đồng bộ lên máy chủ; thoát app / tắt màn hình cũng lưu ngay. Không cần bấm Lưu.
@@ -1516,7 +1726,7 @@ function persistNote(f){
 }
 function noteCreatedInEditor(f,id){
   const eb=f.querySelector(".ne-head .eyebrow");if(eb)eb.textContent="SỬA KỊCH BẢN";
-  const act=f.querySelector(".ne-actions");if(act&&!act.querySelector(".danger-text"))act.insertAdjacentHTML("afterbegin",`<button type="button" class="outline-btn danger-text" onclick="deleteNote('${id}',true)">Xoá</button><button type="button" class="outline-btn" onclick="saveNoteThenRead('${id}')">Đọc</button><button type="button" class="outline-btn" onclick="saveNoteThenExport('${id}')">Word</button>`);
+  const act=f.querySelector(".ne-actions");if(act&&!act.querySelector(".danger-text"))act.insertAdjacentHTML("afterbegin",`<button type="button" class="outline-btn danger-text" onclick="deleteNote('${id}',true)">Xoá</button><button type="button" class="outline-btn" onclick="saveNoteThenRead('${id}')">Đọc</button><button type="button" class="outline-btn" onclick="saveNoteThenExport('${id}')">Word</button><button type="button" class="outline-btn" onclick="saveNoteThenPdf('${id}')">PDF</button>`);
 }
 let noteAutoTimer=null;
 function noteAutoSoon(){clearTimeout(noteAutoTimer);noteSavedLabel("Đang gõ…");noteAutoTimer=setTimeout(noteAutoSave,1500);}
