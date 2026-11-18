@@ -19,6 +19,7 @@
  *   GET  /resolve?u=…                             mở link rút gọn Google Maps (maps.app.goo.gl) → link đầy đủ
  *   POST /lstoken {group}  (header x-app-key)      lấy/tạo mã bí mật để Apps Script Love Story báo tin
  *   POST /lsnotify?g=…&t=…  {title, body, code}    Apps Script gọi khi dâu rể bấm Gửi → đẩy thông báo tới cả nhóm
+ *   POST /translate {text, from, to}  (header x-app-key)  dịch Anh ↔ Việt bằng Workers AI (gói miễn phí 10.000 neuron/ngày)
  *   GET  /status                                  → { setup, hasState }
  *   POST /setup   { key, from }                     đặt mã truy cập lần đầu (hoặc kiểm tra mã);
  *                                                   from = địa chỉ app Netlify cũ để chép dữ liệu sang
@@ -206,6 +207,35 @@ export class Hub {
     return json({ error: 'Method not allowed' }, 405);
   }
 
+  // ---- Dịch Anh ↔ Việt cho kịch bản (Cloudflare Workers AI, nằm trong gói miễn phí) ----
+  async translate(req) {
+    if (req.method !== 'POST') return json({ ok: false }, 405);
+    const ok = await this.keyOk(req.headers.get('x-app-key'));
+    if (!ok) return json({ ok: false, loi: 'Sai mã truy cập' }, 401);
+    if (!this.env || !this.env.AI) return json({ ok: false, loi: 'Máy chủ chưa bật Workers AI (thiếu [ai] trong wrangler.toml)' }, 500);
+    const q = await req.json().catch(() => ({}));
+    const text = String(q.text || '').trim().slice(0, 4000);
+    if (!text) return json({ ok: false, loi: 'Không có chữ để dịch' }, 400);
+    const vi = /[ăâđêôơưàảãáạằẳẵắặầẩẫấậèẻẽéẹềểễếệìỉĩíịòỏõóọồổỗốộờởỡớợùủũúụừửữứựỳỷỹýỵ]/i;
+    const from = q.from === 'vi' || q.from === 'en' ? q.from : (vi.test(text) ? 'vi' : 'en'), to = from === 'vi' ? 'en' : 'vi';
+    const L = { vi: 'Vietnamese', en: 'English' };
+    const sys = `You are the translator for Thiên Ân, a bilingual Vietnamese–English MC for luxury weddings and events. Translate the user's text from ${L[from]} to ${L[to]}.
+Rules: keep the meaning, the warm and elegant spoken tone suitable for reading aloud on stage; keep people's names, places and numbers unchanged; keep every line break and blank line exactly; keep anything inside [square brackets] (stage cues) unchanged; ${to === 'vi' ? 'use natural Vietnamese with correct diacritics, polite forms such as "quý vị", "hai bạn" where suitable' : 'use natural, fluent English'}.
+Output ONLY the translation — no quotes, no notes, no explanations.`;
+    let out = '', model = '@cf/google/gemma-3-12b-it';
+    try {
+      const r = await this.env.AI.run(model, { messages: [{ role: 'system', content: sys }, { role: 'user', content: text }], max_tokens: Math.min(2048, Math.ceil(text.length / 2) + 256), temperature: 0.2 });
+      out = String(r && (r.response ?? r.result?.response) || '').trim();
+    } catch (e) { out = ''; }
+    if (!out) {
+      // dự phòng: mô hình dịch chuyên dụng
+      try { model = '@cf/meta/m2m100-1.2b'; const r = await this.env.AI.run(model, { text, source_lang: from, target_lang: to }); out = String(r && r.translated_text || '').trim(); }
+      catch (e) { return json({ ok: false, loi: /limit|quota|neuron|429/i.test(String(e && e.message)) ? 'Hết lượt dịch miễn phí hôm nay — thử lại sau 7 giờ sáng' : 'Dịch lỗi: ' + String(e && e.message || e).slice(0, 120) }, 502); }
+    }
+    out = out.replace(/^(here is|here's|translation|bản dịch)[^\n]*:\s*\n/i, '').replace(/^["“](.*)["”]$/s, '$1').trim();
+    return json({ ok: true, from, to, text: out, model });
+  }
+
   // ---- Love Story: Apps Script báo khi dâu rể gửi câu trả lời ----
   async loveStory(req, p, u) {
     if (req.method !== 'POST') return json({ ok: false }, 405);
@@ -266,6 +296,7 @@ export class Hub {
       if (p === '/vapid') return json({ publicKey: (await this.vapid()).pub });
       if (p === '/state' || p === '/setup' || p === '/status') return await this.data(req, p);
       if (p === '/lstoken' || p === '/lsnotify') return await this.loveStory(req, p, u);
+      if (p === '/translate') return await this.translate(req);
       if (!['/plan', '/devices', '/sub', '/unsub', '/test'].includes(p)) return json({ ok: false, loi: 'Không có đường dẫn này' }, 404);
       if (req.method !== 'POST') return json({ ok: false, loi: 'Sai phương thức' }, 405);
       const q = await req.json().catch(() => ({}));

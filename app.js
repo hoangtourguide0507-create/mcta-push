@@ -1,5 +1,5 @@
 
-const APP_VERSION="V28.10";
+const APP_VERSION="V28.11";
 // V28.0: app chạy trên GitHub Pages; dữ liệu + thông báo nằm trên máy chủ Cloudflare riêng (mcta-push).
 const CLOUD_DEFAULT="https://mcta-push.hoangtourguide0507.workers.dev";
 const KEY="freelance_planner_v12";
@@ -1231,9 +1231,10 @@ function openNote(existing=null,opts={}){
    <div id="noteBody" class="ne-body rte" contenteditable="true" data-ph="Nội dung kịch bản, câu dẫn, cue…" style="font-size:${p.edit||19}px" onpaste="rtePaste(event)" oninput="rteRecord()" onfocus="rteTyping(true)" onblur="rteTyping(false)">${noteHtml(n)}</div>
    <div class="ne-dock" onpointerdown="if(event.target.closest('button'))event.preventDefault()">
     <div class="ne-palette" id="nePalette" hidden></div>
+    <div class="ne-trans" id="neTrans" hidden></div>
     <div class="ne-toolbar" id="neToolbar">
      ${tb("rteCmd('bold')","<b>B</b>","In đậm")}${tb("rteCmd('italic')","<i>I</i>","In nghiêng")}${tb("rteCmd('underline')","<u>U</u>","Gạch chân")}${tb("rteCmd('strikeThrough')","<s>S</s>","Gạch ngang")}<i class="tb-sep"></i>
-     ${tb("rtePalette('fore')",'<span class="tb-color">A</span>',"Màu chữ")}${tb("rtePalette('hili')",'<span class="tb-hl">A</span>',"Tô nền")}${tb("rteEN()",'<span class="tb-en">EN</span>',"Dòng tiếng Anh (nghiêng, xanh)")}${tb("rteCue()","[cue]","Chèn cue")}<i class="tb-sep"></i>
+     ${tb("rtePalette('fore')",'<span class="tb-color">A</span>',"Màu chữ")}${tb("rtePalette('hili')",'<span class="tb-hl">A</span>',"Tô nền")}${tb("rteTranslate()",'<span class="tb-tr">🌐 Dịch</span>',"Dịch Anh ↔ Việt (đoạn đang chọn)","tb-wide")}${tb("rteEN()",'<span class="tb-en">EN</span>',"Dòng tiếng Anh (nghiêng, xanh)")}${tb("rteCue()","[cue]","Chèn cue")}<i class="tb-sep"></i>
      ${tb("rteBlock('H3')","H","Tiêu đề đoạn")}${tb("rteCmd('insertUnorderedList')","•≡","Gạch đầu dòng")}${tb("rteCmd('insertOrderedList')","1.≡","Danh sách số")}${tb("rteAlign()",'<span class="tb-al">≡</span>',"Căn giữa / căn trái")}${tb("rteHr()","—","Đường kẻ ngăn đoạn")}<i class="tb-sep"></i>
      ${tb("rteUpper()","AA","IN HOA chữ đang chọn")}${tb("rteClear()","Tx","Xoá định dạng")}${tb("editorSize(-1)","A−","Chữ nhỏ lại")}${tb("editorSize(1)","A+","Chữ to lên")}
     </div>
@@ -1243,6 +1244,53 @@ function openNote(existing=null,opts={}){
   </form>`);
   document.getElementById("modal").classList.add("editor-mode");
   rteInit();fitEditor();rteStat();if(restored){noteDirty=true;noteAutoSave();showToast("Đã khôi phục và lưu bản nháp ✓");}
+}
+// ---- V28.11: dịch Anh ↔ Việt ngay trong kịch bản (Cloudflare Workers AI, miễn phí) ----
+// Bôi đen đoạn cần dịch (không bôi thì dịch đoạn đang đặt con trỏ) → bấm 🌐 Dịch → Thay thế / Chèn bên dưới / Copy.
+let rteTr=null;
+function rteBlockOf(node){const e=rteEl();let n=node&&node.nodeType===3?node.parentNode:node;while(n&&n!==e&&!/^(DIV|P|LI|H3)$/.test(n.tagName))n=n.parentNode;return n&&n!==e?n:null;}
+async function rteTranslate(){
+  const e=rteEl(),panel=document.getElementById("neTrans");if(!e||!panel)return;
+  const pal=document.getElementById("nePalette");if(pal)pal.hidden=true;
+  if(!rteSelInside()){showToast("Đặt con trỏ hoặc bôi đen đoạn cần dịch trước");return;}
+  const sel=getSelection();let range=sel.getRangeAt(0).cloneRange();
+  if(range.collapsed){const blk=rteBlockOf(range.startContainer),r2=document.createRange();
+    if(blk)r2.selectNodeContents(blk);
+    else{// dòng chữ nằm trực tiếp trong vùng soạn (không bọc khối): lấy các phần tử cùng dòng, dừng ở xuống dòng / khối
+      let top=range.startContainer;while(top&&top.parentNode!==e)top=top.parentNode;
+      const isBreak=n=>n&&n.nodeType===1&&/^(DIV|P|LI|H3|UL|OL|HR|BR)$/.test(n.tagName);
+      if(!top||isBreak(top))r2.selectNodeContents(e);else{let a=top,b=top;while(a.previousSibling&&!isBreak(a.previousSibling))a=a.previousSibling;while(b.nextSibling&&!isBreak(b.nextSibling))b=b.nextSibling;r2.setStartBefore(a);r2.setEndAfter(b);}}
+    range=r2;sel.removeAllRanges();sel.addRange(range);range=range.cloneRange();}
+  const box=document.createElement("div");box.appendChild(range.cloneContents());
+  const text=htmlToText(box.innerHTML).trim();
+  if(!text){showToast("Đoạn này chưa có chữ");return;}
+  if(text.length>4000){showToast("Đoạn quá dài — chọn tối đa khoảng 4.000 ký tự mỗi lần");return;}
+  if(!cloudUrl()){alert("Chức năng dịch cần kết nối máy chủ Cloudflare (Khác → Máy chủ dữ liệu & thông báo).");return;}
+  rteTr={range,text,out:"",to:""};
+  panel.hidden=false;panel.innerHTML=`<div class="tr-head"><b>🌐 Đang dịch…</b><button type="button" class="tr-x" onclick="rteTrClose()">×</button></div><div class="tr-out muted">${esc(text.slice(0,160))}${text.length>160?"…":""}</div>`;
+  try{
+    const r=await fetch(cloudUrl()+"/translate",{method:"POST",headers:{"Content-Type":"application/json","x-app-key":accessKey()},body:JSON.stringify({text})});
+    const j=await r.json().catch(()=>({}));
+    if(!r.ok||!j.ok)throw new Error(j.loi||("Máy chủ trả lỗi "+r.status));
+    if(!rteTr||rteTr.text!==text)return;
+    rteTr.out=j.text;rteTr.to=j.to;
+    panel.innerHTML=`<div class="tr-head"><b>${j.to==="en"?"Việt → Anh":"Anh → Việt"}</b><button type="button" class="tr-x" onclick="rteTrClose()">×</button></div>
+     <div class="tr-out">${esc(j.text).replace(/\n/g,"<br>")}</div>
+     <div class="tr-act"><button type="button" class="black-btn" onclick="rteTrApply('below')">Chèn bên dưới</button><button type="button" class="outline-btn" onclick="rteTrApply('replace')">Thay thế</button><button type="button" class="outline-btn" onclick="lsCopy(rteTr.out,'Đã copy bản dịch')">Copy</button></div>`;
+  }catch(err){if(panel&&!panel.hidden)panel.innerHTML=`<div class="tr-head"><b>Chưa dịch được</b><button type="button" class="tr-x" onclick="rteTrClose()">×</button></div><div class="tr-out">${esc(err.message||String(err))}</div><div class="tr-act"><button type="button" class="outline-btn" onclick="rteTranslate()">Thử lại</button></div>`;}
+}
+function rteTrClose(){const p=document.getElementById("neTrans");if(p){p.hidden=true;p.innerHTML="";}rteTr=null;}
+function rteTrApply(mode){
+  const t=rteTr,e=rteEl();if(!t||!t.out||!e)return;
+  const lines=t.out.split("\n"),style=t.to==="en"?' style="font-style:italic;color:#2563eb"':"";
+  rteSnap();
+  if(mode==="replace"){const sel=getSelection();sel.removeAllRanges();sel.addRange(t.range);document.execCommand("insertHTML",false,lines.map(l=>esc(l)).join("<br>"));}
+  else{let anchor=rteBlockOf(t.range.endContainer);
+    if(!anchor){let n=t.range.endContainer;if(n===e)n=e.childNodes[t.range.endOffset-1]||e.lastChild;while(n&&n.parentNode!==e)n=n.parentNode;if(n){while(n.nextSibling&&!(n.nextSibling.nodeType===1&&/^(DIV|P|LI|H3|UL|OL|HR)$/.test(n.nextSibling.tagName))){if(n.nextSibling.nodeName==="BR"){n=n.nextSibling;break;}n=n.nextSibling;}anchor=n;}}
+    const frag=document.createDocumentFragment();lines.forEach(l=>{const d=document.createElement("div");if(l.trim()){d.innerHTML=`<span${style}>${esc(l)}</span>`;}else d.innerHTML="<br>";frag.appendChild(d);});
+    if(anchor&&anchor.tagName==="LI")anchor=anchor.closest("ul,ol")||anchor;
+    if(anchor&&anchor.parentNode)anchor.parentNode.insertBefore(frag,anchor.nextSibling);else e.appendChild(frag);}
+  noteDirty=true;rteSnap();noteDraftSoon();noteAutoSoon();rteTrClose();showToast(mode==="replace"?"Đã thay bằng bản dịch":"Đã chèn bản dịch bên dưới");
 }
 // ---- V28.2: thanh công cụ soạn kịch bản đầy đủ hơn ----
 const RTE_FORE=[["#e5304f","Đỏ"],["#2563eb","Xanh dương"],["#059669","Xanh lá"],["#ea580c","Cam"],["#7c3aed","Tím"],["#111827","Đen"]];

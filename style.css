@@ -1037,3 +1037,16 @@ button{color:inherit}
 :root[data-theme="stage"] .dup-banner b,:root[data-theme="stage"] .dup-banner span{color:var(--coral)}
 :root[data-theme="stage"] .dup-group{background:linear-gradient(180deg,#191923,#14141c);border-color:rgba(255,255,255,.07)}
 .dup-banner.undo{border-color:var(--line);background:var(--soft,#f3f4f8)}.dup-banner.undo b{color:var(--ink)}.dup-banner.undo span{color:var(--muted)}
+/* V28.11 · dịch trong kịch bản */
+.tb.tb-wide{min-width:auto;padding:0 12px}
+.tb-tr{font-size:14px;font-weight:850;white-space:nowrap}
+.ne-trans{padding:10px 12px;border:1px solid var(--line);border-radius:16px;background:var(--paper,#fff);box-shadow:0 8px 22px rgba(0,0,0,.1);max-height:38vh;overflow:auto;display:flex;flex-direction:column;gap:8px}
+.ne-trans[hidden]{display:none}
+.tr-head{display:flex;justify-content:space-between;align-items:center;font-size:13px}
+.tr-x{border:0;background:var(--soft,#f1f2f6);border-radius:10px;width:30px;height:30px;font-size:18px;color:var(--ink)}
+.tr-out{font-size:15px;line-height:1.5;white-space:normal}
+.tr-out.muted{color:var(--muted);font-size:13px}
+.tr-act{display:flex;gap:8px;flex-wrap:wrap}
+.tr-act button{padding:9px 13px;font-size:13.5px}
+:root[data-theme="stage"] .ne-trans{background:#1a1a24;border-color:#2a2a37}
+:root[data-theme="stage"] .tr-x{background:#23232f}
