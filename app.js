@@ -1,5 +1,5 @@
 
-const APP_VERSION="V28.15";
+const APP_VERSION="V28.16";
 // V28.0: app chạy trên GitHub Pages; dữ liệu + thông báo nằm trên máy chủ Cloudflare riêng (mcta-push).
 const CLOUD_DEFAULT="https://mcta-push.hoangtourguide0507.workers.dev";
 const KEY="freelance_planner_v12";
@@ -1726,7 +1726,9 @@ async function pdfReadLocal(buf,onProg){
     const tc=await page.getTextContent();
     let opl=null;try{opl=await page.getOperatorList();}catch(_){}   // nạp phông (đậm / nghiêng) + đường kẻ bảng
     const fontOf=id=>{try{return page.commonObjs.has(id)?page.commonObjs.get(id):null;}catch(_){return null;}};
-    const items=tc.items.filter(it=>it.str!==undefined&&it.str.trim()&&Math.abs(it.transform[1])<=Math.abs(it.transform[0])*0.2+0.01).map(it=>{   // bỏ chữ xoay (watermark)
+    // chữ có dấu trong phông không nhúng: pdf.js trả về chữ rộng 0 + một ô trống mang bề rộng thật → gộp lại
+    const raw=tc.items;for(let k=0;k+1<raw.length;k++){const a=raw[k],n=raw[k+1];if(a.str&&a.str.trim()&&a.width<0.5&&n.str!==undefined&&!n.str.trim()&&n.width>0&&Math.abs(n.transform[4]-(a.transform[4]+a.width))<1.5&&Math.abs(n.transform[5]-a.transform[5])<1){a.width=n.width+(n.transform[4]-a.transform[4]);n.width=0;}}
+    const items=raw.filter(it=>it.str!==undefined&&it.str.trim()&&Math.abs(it.transform[1])<=Math.abs(it.transform[0])*0.2+0.01).map(it=>{   // bỏ chữ xoay (watermark)
       const t=it.transform,size=Math.hypot(t[2],t[3])||it.height||10,f=fontOf(it.fontName)||{},nm=String(f.name||f.loadedName||"")+" "+String((tc.styles[it.fontName]||{}).fontFamily||"");
       const s0=it.str,lead=s0.length-s0.trimStart().length,trail=s0.length-s0.trimEnd().length,per=it.width/Math.max(1,s0.length);   // bỏ khoảng trắng đầu/cuối khỏi bề rộng
       return {s:s0.trim(),x:t[4]+lead*per,y:t[5],w:Math.max(0.1,it.width-(lead+trail)*per),size,b:!!(f.bold||f.black||/bold|black|heavy|semibold|demi/i.test(nm)),i:!!(f.italic||/italic|oblique/i.test(nm))};});
@@ -1775,24 +1777,28 @@ async function pdfReadLocal(buf,onProg){
       let runs=l.runs.map(r=>({...r}));let kind=big?"h":"p",lt="";
       const mB=l.text.match(BUL),mN=!mB&&l.text.match(NUM);
       const firstWord=(l.text.trim().split(/\s+/)[0]||"");
-      const wrapped=prev&&(box.right-prev.x1)<firstWord.length*l.size*0.55+l.size*1.2&&!/\t/.test(prev.text);
+      const wordW=[...firstWord].reduce((s,ch)=>s+(/[A-ZĐÂĂÊÔƠƯÀ-Ỹ]/.test(ch)&&ch===ch.toUpperCase()&&ch!==ch.toLowerCase()?0.72:/[.,;:!'’|il]/.test(ch)?0.3:0.52),0)*l.size;
+      const wrapped=prev&&(box.right-prev.x1)<wordW+l.size*0.65&&!/\t/.test(prev.text);   // ước bề rộng chữ đầu dòng + 1 khoảng trắng
       const hyphenWrap=mB&&/^[-–—]$/.test(mB[1])&&wrapped&&para&&para.kind!=="li";
       if(mB&&!hyphenWrap&&l.text.replace(BUL,"").trim()&&!/^\s*[-–—]\s*\d/.test(l.text)){kind="li";lt="ul";let cut=mB[0].length;while(cut>0&&runs.length){const r=runs[0],k=Math.min(cut,r.t.length);r.t=r.t.slice(k);cut-=k;if(!r.t)runs.shift();}}
       // (wrapped = dòng trước bị xuống hàng tự động: chữ đầu dòng này lẽ ra đã vừa ở cuối dòng trước nếu còn chỗ)
       const near=gap===null?(prev&&!samePg&&prev.pg===l.pg-1):gap<Math.max(l.size,prev.size)*1.75;
-      const cont=para&&para.kind!=="h"&&kind==="p"&&!mN&&near&&wrapped&&Math.abs(l.size-prev.size)<0.6&&!center&&!para.center&&!/[:：]$/.test(prev.text)&&!/^\s*\d{1,2}[:h]\d{2}\b/.test(l.text)&&!/\t/.test(l.text);
+      const boldBreak=(para&&para.runs.every(r=>r.b||!r.t.trim())&&runs.length&&!runs[0].b)||(prev&&!samePg&&/[.!?…]["”»)]?$/.test(prev.text.trim()));   // + sang trang mới sau dấu chấm → đoạn mới
+      const cont=para&&para.kind!=="h"&&kind==="p"&&!mN&&near&&wrapped&&!boldBreak&&Math.abs(l.size-prev.size)<0.6&&!center&&!para.center&&!/[:：]$/.test(prev.text)&&!/^\s*\d{1,2}[:h]\d{2}\b/.test(l.text)&&!/\t/.test(l.text);
       const contLi=para&&para.kind==="li"&&kind==="p"&&!mN&&near&&wrapped&&l.x0>prev.x0-2;
       if(cont||contLi){const last=para.runs[para.runs.length-1];const sep=/\p{L}[-‐]$/u.test(last?last.t:"")||(/[\d:.,/]$/.test(last?last.t:"")&&/^\d/.test(l.text.trim())&&l.text.trim().length<=3)?"":" ";if(runs[0])runs[0].t=sep+runs[0].t.replace(/^\s+/,"");para.runs.push(...runs);}
       else{if(gap!==null&&gap>Math.max(l.size,prev.size)*2.1&&paras.length&&kind!=="h")paras.push({blank:true});
         para={kind,lt,runs,center:kind==="p"&&center};paras.push(para);}
       prev=l;}
     return paras;};
-  const HEAD=/^(stt|tt|thời gian|giờ|time|nội dung|content|lời dẫn|lời dẫn mc|lời mc|mc|kịch bản|script|ghi chú|note|notes|phụ trách|người phụ trách|người thực hiện|thực hiện|hạng mục|phần|mục|chương trình|nội dung chương trình|tiết mục|âm thanh|ánh sáng|sân khấu|ekip|bộ phận|chi tiết|hoạt động)$/i;
+  const HEAD=/^(stt|tt|thời gian|giờ|time|nội dung|content|lời dẫn|lời dẫn mc|lời mc|mc|kịch bản|script|ghi chú|note|notes|phụ trách|người phụ trách|người thực hiện|thực hiện|hạng mục|phần|mục|chương trình|nội dung chương trình|tiết mục|âm thanh|ánh sáng|sân khấu|ekip|bộ phận|chi tiết|hoạt động|nhiệm vụ|thứ tự|chú ý|lưu ý|nội dung dẫn chương trình|người dẫn|yêu cầu|đạo cụ|thời lượng)$/i;
+  const headLike=s=>{s=String(s||"").replace(/\s+/g," ").trim();return s.length>0&&s.length<=30&&(HEAD.test(s.replace(/[:.]$/,""))||(s===s.toUpperCase()&&/\p{L}/u.test(s)));};
+  const cellText=c=>c.lines.map(l=>l.text).join(" ").replace(/\s+/g," ").trim();
+  const isHeadRow=r=>r.filter(c=>cellText(c)).length>=2&&r.every(c=>!cellText(c)||headLike(cellText(c)));
   let lastShortRow=false;
   const emitTable=T=>{T.rows.forEach((row,ri)=>{
     const cells=row.map(c=>{const box={left:Math.min(...c.lines.map(l=>l.x0)),right:Math.max(...c.lines.map(l=>l.x1))};const paras=buildParas(c.lines,box).filter(p=>!p.blank);return {paras,text:paras.map(p=>p.runs.map(r=>r.t).join("")).join(" ").replace(/\s+/g," ").trim(),n:c.lines.length};}).filter(c=>c.text);
     if(!cells.length)return;
-    if(ri===0&&T.rows.length>1&&cells.length>=2&&cells.every(c=>c.text.length<=30&&(HEAD.test(c.text.replace(/[:.]$/,""))||(c.text===c.text.toUpperCase()&&/\p{L}/u.test(c.text)))))return;   // hàng tiêu đề cột
     const short=cells.every(c=>c.text.length<=70&&c.n<=2);
     if(short&&cells.length>=2){if(!lastShortRow)blank();closeList();out.push(`<div>${cells.map((c,k)=>{const h=esc(c.text);return k===0&&cells.length>2?`<b>${h}</b>`:h;}).join(" — ")}</div>`);lastShortRow=true;return;}
     if(short&&cells.length===1){if(!lastShortRow)blank();cells[0].paras.forEach(p=>emit(p));lastShortRow=true;return;}
@@ -1806,11 +1812,31 @@ async function pdfReadLocal(buf,onProg){
   // thứ tự đọc: theo trang, trên → dưới; văn bản thường và bảng xen kẽ đúng vị trí
   let chunk=[];
   const flushChunk=()=>{if(chunk.length){buildParas(chunk,flowBox).forEach(p=>emit(p));lastShortRow=false;}chunk=[];};
-  pages.forEach(pg=>{const ents=[...pg.flow.map(l=>({y:l.y,l})),...pg.tables.map(T=>({y:T.top+0.01,T}))].sort((a,b)=>b.y-a.y);
-    for(const e of ents){if(e.l)chunk.push(e.l);else{flushChunk();emitTable(e.T);}}});
+  const ents=[];pages.forEach(pg=>{ents.push(...[...pg.flow.map(l=>({y:l.y,l,pg:l.pg})),...pg.tables.map(T=>({y:T.top+0.01,T,pg:T.pg}))].sort((a,b)=>b.y-a.y));});
+  // bỏ hàng tiêu đề cột (kể cả khi lặp lại ở đầu mỗi trang) và dòng tiêu đề cột nằm ngoài bảng
+  ents.forEach((e,k)=>{if(e.T){while(e.T.rows.length>1&&isHeadRow(e.T.rows[0]))e.T.rows.shift();}
+    else if(e.l.segs.length>=2&&e.l.segs.every(s=>headLike(s.text))&&ents[k+1]&&ents[k+1].T)e.drop=true;});
+  // bảng kéo dài sang trang sau: hàng đầu trang mới là phần tiếp của hàng cuối trang trước → nối lại
+  const numbered=s=>/^\s*(([IVXLC]+|\d+|[a-zA-Z])\s*[.)]|[IVXLC]+\.?\s)/.test(s);
+  for(let k=1;k<ents.length;k++){const e=ents[k];if(!e.T||!e.T.rows.length)continue;
+    let q=k-1;const between=[];while(q>=0&&ents[q].l&&ents[q].pg===e.pg){between.push(ents[q]);q--;}
+    const P=q>=0&&ents[q].T&&ents[q].pg===e.pg-1&&ents[q].T.rows.length?ents[q].T:null;if(!P)continue;
+    if(between.some(b=>!b.drop&&!(b.l.text.length<=90&&b.l.text===b.l.text.toUpperCase())))continue;
+    const last=P.rows[P.rows.length-1],r0=e.T.rows[0];
+    const cols=P.rows.flat().map(c=>[c.x0,c.x1]),left=Math.min(...cols.map(c=>c[0]));
+    const ov=(a,b)=>Math.min(a.x1,b.x1)-Math.max(a.x0,b.x0)>Math.min(a.x1-a.x0,b.x1-b.x0)*0.5;
+    if(!r0.every(c=>cols.some(([x0,x1])=>ov(c,{x0,x1}))))continue;   // cột không khớp → bảng khác
+    const lab0=last.find(c=>c.x0<left+8&&cellText(c)),labN=r0.find(c=>c.x0<left+8&&cellText(c));
+    const lt=lab0?cellText(lab0):"",quotesOpen=(lt.match(/[“"]/g)||[]).length>(lt.match(/[”"]/g)||[]).length;
+    const contRow=!labN||quotesOpen||(lab0&&numbered(lt)&&!numbered(cellText(labN)));
+    if(!contRow)continue;
+    between.forEach(b=>b.drop=true);
+    r0.forEach(c=>{const m=last.find(d=>ov(c,d));if(m)m.lines.push(...c.lines);else{last.push(c);last.sort((a,b)=>a.x0-b.x0);}});
+    e.T.rows.shift();}
+  for(const e of ents){if(e.drop)continue;if(e.l)chunk.push(e.l);else{flushChunk();emitTable(e.T);}}
   flushChunk();closeList();
   while(out.length&&out[0]==="<div><br></div>")out.shift();while(out.length&&out[out.length-1]==="<div><br></div>")out.pop();
-  return {html:sanitizeHtml(out.join("")),pages:pages.length,chars};
+  return {html:sanitizeHtml(out.join("").normalize("NFC")),pages:pages.length,chars};   // dấu tách rời (a + ̣ ) → chữ dựng sẵn
 }
 // ---- Xuất PDF (A4, chữ thật — bôi đen / tìm kiếm được) ----
 async function buildNotePdf(n){
