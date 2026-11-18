@@ -323,11 +323,15 @@ ${before || after ? `\nSurrounding script for context only (do NOT translate or 
 Rules:
 1. Transcribe ALL the text in reading order, exactly as written — same language(s), same wording, Vietnamese diacritics exactly. Do NOT translate, summarise, shorten, correct, reorder or add anything.
 2. Keep the structure: section titles as "## Title"; **bold** and *italic* where the PDF uses them; bulleted lists as "- item"; numbered lists as "1. item"; keep separate lines and speaker turns on separate lines; a blank line between paragraphs. Join lines that were only wrapped by the page width back into one paragraph.
-3. Tables (run-of-show, timeline, cue sheet): one row per line, cells separated by " | ", header row in bold. Never use Markdown table syntax.
+3. Tables — read each row from left to right, row by row, never mixing text from different columns or rows:
+   - Script rows (one cell holds the MC's lines, other cells hold a section name/time and stage notes): write the section/time cells as one bold line, e.g. "**I. ỔN ĐỊNH**" or "**18:00 · Đón khách**"; then the MC's lines as normal paragraphs (a line break inside the cell = a new line); then each notes cell on its own line in italics inside parentheses, e.g. "*(Kiểm tra micro và âm thanh)*". Put a blank line between rows.
+   - Short rows where every cell is a few words (timeline, cue list): one line per row, cells joined with " — ".
+   - Skip the column-header row (STT, Thời gian, Nội dung, Ghi chú…). Never use Markdown table syntax or the "|" character.
 4. Speaker labels (MC:, MC 1:, Cô dâu:, …) and stage cues ([Nhạc lên], (Âm thanh …), …) stay exactly as written.
 5. Skip page numbers, repeated page headers/footers and watermarks. Ignore logos and decoration; if an image contains text (scan or photo), transcribe that text.
 6. If a word is unreadable write [?] — never guess.
-7. Output ONLY the Markdown: no code fences, no comments, no introduction.`;
+7. Never output HTML tags such as <br>, <b>, <p> — use real line breaks and Markdown only.
+8. Output ONLY the Markdown: no code fences, no comments, no introduction.`;
   }
   async pdf2text(req) {
     if (req.method !== 'POST') return json({ ok: false }, 405);

@@ -1,5 +1,5 @@
 
-const APP_VERSION="V28.14";
+const APP_VERSION="V28.15";
 // V28.0: app chạy trên GitHub Pages; dữ liệu + thông báo nằm trên máy chủ Cloudflare riêng (mcta-push).
 const CLOUD_DEFAULT="https://mcta-push.hoangtourguide0507.workers.dev";
 const KEY="freelance_planner_v12";
@@ -1547,7 +1547,7 @@ async function pdfRun(mode){
     }else{
       pdfStatus('<span class="spin"></span> Gemini đang đọc file… (10–60 giây, đừng thoát app)');
       const r=await pdfReadGemini(P.file);if(P.cancel)return;
-      html=sanitizeHtml(mdToHtml(r.md));via="Gemini";
+      html=sanitizeHtml(mdToHtml(pdfMdClean(r.md)));via="Gemini";
       if(r.partial)showToast("File dài — Gemini chỉ đọc được phần đầu, kiểm tra phần cuối nhé");
     }
     if(!htmlToText(html).trim()){done();pdfStatus("Không đọc được nội dung từ file này.","warn");return;}
@@ -1558,6 +1558,8 @@ async function pdfRun(mode){
     showToast(`Đã nhập ${pages?pages+" trang ":""}bằng ${via} ✓ — xem lại nội dung nhé`);
   }catch(e){done();pdfStatus(esc(e&&e.message||"Lỗi đọc PDF"),"err");}
 }
+// Gemini đôi khi chèn thẻ HTML (<br>, <b>…) vào Markdown → đổi về dạng chuẩn
+function pdfMdClean(md){return String(md||"").replace(/\r/g,"").replace(/<br\s*\/?>/gi,"\n").replace(/<\/?(b|strong)>/gi,"**").replace(/<\/?(i|em)>/gi,"*").replace(/<\/?(p|div)[^>]*>/gi,"\n").replace(/<[^>\n]{1,40}>/g,"").replace(/&nbsp;/g," ").replace(/&amp;/g,"&").replace(/\n{3,}/g,"\n\n");}
 async function pdfReadGemini(file){
   if(!accessKey())throw new Error("Chưa kết nối máy chủ — vào Khác → Đồng bộ để nhập mã truy cập.");
   let r;try{r=await fetch(cloudUrl()+"/pdf2text",{method:"POST",headers:{"Content-Type":"application/pdf","x-app-key":accessKey()},body:file});}
@@ -1566,76 +1568,250 @@ async function pdfReadGemini(file){
   if(!r.ok||!j.ok||!j.md)throw new Error(j.loi||"Gemini không đọc được file này.");
   return j;
 }
-// Đọc chữ trên máy: gom chữ thành dòng → ghép dòng thành đoạn; nhận tiêu đề (chữ to), in đậm/nghiêng (theo tên phông), gạch đầu dòng, căn giữa; bỏ số trang & header/footer lặp lại.
+// Đọc chữ trên máy (V28.15): nhận ra BẢNG (có kẻ viền hoặc không) để không trộn chữ giữa các cột;
+// ghép dòng bị xuống hàng thành đoạn; tiêu đề (chữ to), đậm/nghiêng, gạch đầu dòng, căn giữa; bỏ số trang & header/footer lặp lại.
+// Mỗi hàng của bảng kịch bản → tên mục (đậm) · lời dẫn (đoạn văn) · ghi chú (nghiêng, trong ngoặc).
+function pdfRules(opl,OPS){
+  const H=[],V=[];if(!opl||!OPS)return {H,V};
+  let m=[1,0,0,1,0,0];const stack=[];let segs=[],rects=[],poly=null;
+  const endPoly=()=>{if(poly&&poly.length>=3)rects.push(poly);poly=null;};
+  const mul=(A,B)=>[A[0]*B[0]+A[2]*B[1],A[1]*B[0]+A[3]*B[1],A[0]*B[2]+A[2]*B[3],A[1]*B[2]+A[3]*B[3],A[0]*B[4]+A[2]*B[5]+A[4],A[1]*B[4]+A[3]*B[5]+A[5]];
+  const P=(x,y)=>[m[0]*x+m[2]*y+m[4],m[1]*x+m[3]*y+m[5]];
+  const addSeg=(a,b)=>{const dx=Math.abs(a[0]-b[0]),dy=Math.abs(a[1]-b[1]);
+    if(dy<1.5&&dx>4)H.push({y:(a[1]+b[1])/2,x0:Math.min(a[0],b[0]),x1:Math.max(a[0],b[0])});
+    else if(dx<1.5&&dy>4)V.push({x:(a[0]+b[0])/2,y0:Math.min(a[1],b[1]),y1:Math.max(a[1],b[1])});};
+  const fn=opl.fnArray,ar=opl.argsArray;
+  for(let i=0;i<fn.length;i++){const f=fn[i],a=ar[i];
+    if(f===OPS.save)stack.push(m);
+    else if(f===OPS.restore){if(stack.length)m=stack.pop();}
+    else if(f===OPS.transform)m=mul(m,a);
+    else if(f===OPS.paintFormXObjectBegin){stack.push(m);if(a&&Array.isArray(a[0])&&a[0].length===6)m=mul(m,a[0]);}
+    else if(f===OPS.paintFormXObjectEnd){if(stack.length)m=stack.pop();}
+    else if(f===OPS.constructPath){const ops=a[0],c=a[1];let j=0,cur=null,start=null;
+      for(const o of ops){
+        if(o===OPS.rectangle){const x=c[j],y=c[j+1],w=c[j+2],h=c[j+3];j+=4;endPoly();rects.push([P(x,y),P(x+w,y),P(x+w,y+h),P(x,y+h)]);cur=start=P(x,y);}
+        else if(o===OPS.moveTo){endPoly();cur=start=P(c[j],c[j+1]);poly=[cur];j+=2;}
+        else if(o===OPS.lineTo){const nx=P(c[j],c[j+1]);j+=2;if(cur)segs.push([cur,nx]);cur=nx;if(poly)poly.push(nx);}
+        else if(o===OPS.curveTo){cur=P(c[j+4],c[j+5]);j+=6;}
+        else if(o===OPS.curveTo2||o===OPS.curveTo3){cur=P(c[j+2],c[j+3]);j+=4;}
+        else if(o===OPS.closePath){if(cur&&start)segs.push([cur,start]);cur=start;endPoly();}}}
+    else if(f===OPS.endPath){segs=[];rects=[];poly=null;}
+    else if([OPS.stroke,OPS.closeStroke,OPS.fill,OPS.eoFill,OPS.fillStroke,OPS.eoFillStroke,OPS.closeFillStroke,OPS.closeEOFillStroke].includes(f)){
+      const stroke=f!==OPS.fill&&f!==OPS.eoFill;endPoly();
+      if(stroke)segs.forEach(s=>addSeg(s[0],s[1]));
+      for(const r of rects){const xs=r.map(p=>p[0]),ys=r.map(p=>p[1]),w=Math.max(...xs)-Math.min(...xs),h=Math.max(...ys)-Math.min(...ys);
+        if(h<=3&&w>4)H.push({y:(Math.max(...ys)+Math.min(...ys))/2,x0:Math.min(...xs),x1:Math.max(...xs)});        // đường kẻ vẽ bằng hình chữ nhật mảnh
+        else if(w<=3&&h>4)V.push({x:(Math.max(...xs)+Math.min(...xs))/2,y0:Math.min(...ys),y1:Math.max(...ys)});
+        else if(stroke&&r.length===4)for(let k=0;k<4;k++)addSeg(r[k],r[(k+1)%4]);}
+      segs=[];rects=[];}
+  }
+  return {H,V};
+}
+// gom chữ thành dòng; mỗi dòng chia thành "đoạn ngang" (seg) khi có khoảng trống lớn
+function pdfLines(items){
+  const sorted=[...items].sort((a,b)=>b.y-a.y||a.x-b.x),lines=[];
+  for(const it of sorted){const L=lines.find(l=>Math.abs(l.y-it.y)<Math.max(2,Math.min(l.size,it.size)*0.45));if(L){L.items.push(it);L.size=Math.max(L.size,it.size);}else lines.push({y:it.y,size:it.size,items:[it]});}
+  lines.sort((a,b)=>b.y-a.y);
+  for(const L of lines){L.items.sort((a,b)=>a.x-b.x);const segs=[];let seg=null,endX=null;
+    for(const it of L.items){let s=it.s;const gap=endX===null?0:it.x-endX;
+      const bulletOnly=seg&&/^\s*([•●▪■◦○►▶✓✔❖◆◇➢➤\-–—*·+]|[\uf000-\uf8ff]|\d{1,2}[.)]|[a-zA-Z][.)]|[IVX]{1,4}\.)\s*$/.test(seg.runs.map(r=>r.t).join(""));
+      if(!seg||(gap>Math.max(L.size*1.8,9)&&!bulletOnly)){seg={x0:it.x,x1:it.x+it.w,runs:[]};segs.push(seg);s=s.replace(/^\s+/,"");}
+      else if(bulletOnly&&gap>L.size*0.18&&!/^\s/.test(s))s=" "+s;
+      else if(gap>L.size*0.18&&!/\s$/.test(seg.runs.length?seg.runs[seg.runs.length-1].t:"")&&!/^\s/.test(s))s=" "+s;
+      const last=seg.runs[seg.runs.length-1];if(last&&last.b===it.b&&last.i===it.i)last.t+=s;else seg.runs.push({t:s,b:it.b,i:it.i});
+      seg.x1=Math.max(seg.x1,it.x+it.w);endX=it.x+it.w;}
+    segs.forEach(s=>{s.text=s.runs.map(r=>r.t).join("").replace(/\s+$/,"");});
+    L.segs=segs.filter(s=>s.text.trim());pdfLineFromSegs(L);}
+  return lines.filter(l=>l.segs.length);
+}
+function pdfLineFromSegs(L){const runs=[];L.segs.forEach((s,k)=>{s.runs.forEach((r,q)=>runs.push({...r,t:(k&&!q?"\t":"")+r.t}));});
+  L.runs=runs;L.x0=L.segs[0].x0;L.x1=L.segs[L.segs.length-1].x1;L.text=runs.map(r=>r.t).join("").replace(/\s+$/,"");return L;}
+function pdfSegLine(L,s){return {y:L.y,size:L.size,pg:L.pg,pw:L.pw,ph:L.ph,segs:[s],runs:s.runs.map(r=>({...r})),x0:s.x0,x1:s.x1,text:s.text};}
+// bảng có kẻ viền: mỗi chữ thuộc ô nào (4 đường kẻ bao quanh)
+function pdfBorderTables(items,R){
+  const V=R.V;if(R.H.length<2||V.length<2)return {tables:[],rest:items};
+  // chỉ giữ đường ngang chạm đường dọc ở đầu mút (đường viền ô) — bỏ gạch chân / gạch ngang chữ
+  const H=R.H.filter(h=>V.some(v=>(Math.abs(v.x-h.x0)<3||Math.abs(v.x-h.x1)<3)&&h.y>=v.y0-3&&h.y<=v.y1+3));if(H.length<2)return {tables:[],rest:items};
+  const cells=new Map(),rest=[];
+  for(const it of items){const px=it.x+Math.min(it.w,it.size)*0.5,py=it.y+it.size*0.3;
+    let l=-1e9,r=1e9,t=1e9,b=-1e9;
+    for(const v of V)if(py>=v.y0-1&&py<=v.y1+1){if(v.x<=px&&v.x>l)l=v.x;if(v.x>px&&v.x<r)r=v.x;}
+    for(const h of H)if(px>=h.x0-1&&px<=h.x1+1){if(h.y>=py&&h.y<t)t=h.y;if(h.y<py&&h.y>b)b=h.y;}
+    if(l<-1e8||r>1e8||t>1e8||b<-1e8){rest.push(it);continue;}
+    const k=[l,r,t,b].map(v=>Math.round(v)).join(",");if(!cells.has(k))cells.set(k,{x0:l,x1:r,top:t,bot:b,items:[]});cells.get(k).items.push(it);}
+  // gom ô thành bảng (các ô chạm nhau)
+  const cs=[...cells.values()],par=cs.map((_,i)=>i),find=i=>par[i]===i?i:(par[i]=find(par[i]));
+  const touch=(a,b)=>a.x0<=b.x1+2&&b.x0<=a.x1+2&&a.bot<=b.top+2&&b.bot<=a.top+2;
+  for(let i=0;i<cs.length;i++)for(let j=i+1;j<cs.length;j++)if(touch(cs[i],cs[j]))par[find(i)]=find(j);
+  const groups={};cs.forEach((c,i)=>{(groups[find(i)]=groups[find(i)]||[]).push(c);});
+  const tables=[];
+  for(const g of Object.values(groups)){
+    if(g.length<2){g.forEach(c=>rest.push(...c.items));continue;}   // khung viền trang / 1 ô → coi như văn bản thường
+    g.forEach(c=>{c.lines=pdfLines(c.items);});
+    const rowsMap=[];g.sort((a,b)=>b.top-a.top||a.x0-b.x0).forEach(c=>{const R0=rowsMap.find(r=>Math.abs(r.top-c.top)<2.5);if(R0)R0.cells.push(c);else rowsMap.push({top:c.top,cells:[c]});});
+    rowsMap.forEach(r=>r.cells.sort((a,b)=>a.x0-b.x0));
+    tables.push({top:Math.max(...g.map(c=>c.top)),rows:rowsMap.map(r=>r.cells.filter(c=>c.lines.length))});}
+  return {tables,rest};
+}
+// bảng không kẻ viền: tìm "khe" dọc mà không chữ nào cắt ngang và nhiều dòng bắt đầu đúng tại đó (= mép trái một cột),
+// tách dòng theo cột (kể cả khi hai cột sát nhau chỉ cách vài pt), rồi chia hàng theo ô đầu tiên (tên mục / giờ).
+function pdfSegFromItems(items,size){const runs=[];let endX=null,x1=items[0].x;
+  for(const it of items){let s=it.s;const gap=endX===null?0:it.x-endX;
+    if(endX===null)s=s.replace(/^\s+/,"");else if(gap>size*0.18&&!/\s$/.test(runs.length?runs[runs.length-1].t:"")&&!/^\s/.test(s))s=" "+s;
+    const last=runs[runs.length-1];if(last&&last.b===it.b&&last.i===it.i)last.t+=s;else runs.push({t:s,b:it.b,i:it.i});
+    endX=it.x+it.w;x1=Math.max(x1,endX);}
+  return {x0:items[0].x,x1,runs,text:runs.map(r=>r.t).join("").replace(/\s+$/,"")};}
+function pdfGridTables(lines){
+  if(lines.length<3)return {tables:[],rest:lines};
+  const all=lines.flatMap(l=>l.items),left=Math.min(...all.map(i=>i.x)),xs=all.filter(i=>i.x>left+15).map(i=>i.x).sort((a,b)=>a-b);
+  const B=[];for(const x of xs){const c=B.find(b=>Math.abs(b.x-x)<2.5);if(c){c.n++;c.x=(c.x*(c.n-1)+x)/c.n;}else B.push({x,n:1});}
+  const cand=B.filter(b=>b.n>=3).map(b=>b.x);if(!cand.length)return {tables:[],rest:lines};
+  const crosses=(L,b)=>L.items.some(it=>it.x<b-1.5&&it.x+it.w>b+1.5);
+  const starts=(L,b)=>L.items.some(it=>Math.abs(it.x-b)<2.5);
+  const BUL=/^\s*([•●▪■◦○►▶✓✔❖◆◇➢➤\-–—*·+]|[-]|\d{1,3}[.)]?|[a-zA-Z][.)])\s*$/;
+  const tables=[],rest=[];let i=0;
+  while(i<lines.length){
+    const L0=lines[i];let A=cand.filter(b=>starts(L0,b)&&!crosses(L0,b));
+    if(!A.length){rest.push(L0);i++;continue;}
+    A=cand.filter(b=>!crosses(L0,b));let j=i+1;
+    while(j<lines.length){const L=lines[j],P=lines[j-1];if(L.pg!==P.pg||P.y-L.y>L.size*3.2)break;
+      const A2=A.filter(b=>!crosses(L,b));if(!A2.some(b=>A.includes(b)&&lines.slice(i,j+1).some(x=>starts(x,b))))break;
+      if(A.some(b=>!A2.includes(b)&&lines.slice(i,j).filter(x=>starts(x,b)).length>=3))break;   // dòng này cắt ngang một cột đã rõ → hết bảng
+      A=A2;j++;}
+    // bỏ các dòng cuối không bắt đầu ở cột nào và cách xa (đoạn văn thường ngay sau bảng)
+    while(j-1>i&&!A.some(b=>starts(lines[j-1],b))&&lines[j-2].y-lines[j-1].y>lines[j-1].size*2)j--;
+    const reg=lines.slice(i,j);
+    // mép cột thật: ≥3 dòng bắt đầu đúng tại đó, và chữ bên trái luôn cách xa hơn một khoảng trắng giữa hai từ
+    const gutterOk=b=>{let n=0,minGap=1e9;for(const L of reg){const lft=L.items.filter(it=>it.x+it.w<=b+1.5),rgt=L.items.filter(it=>it.x>=b-2.5);if(lft.length&&rgt.length){n++;minGap=Math.min(minGap,(b-Math.max(...lft.map(it=>it.x+it.w)))/Math.max(4.5,L.size*0.42));}}return n>=1&&minGap>=1;};
+    const bounds=A.filter(b=>reg.filter(L=>starts(L,b)).length>=3&&gutterOk(b)).sort((a,b)=>a-b);
+    const col=x=>bounds.filter(b=>b<=x+2.5).length;
+    let ok=bounds.length&&reg.length>=2&&reg.filter(L=>bounds.some(b=>starts(L,b))).length>=3;
+    let rows=null;
+    if(ok){
+      const items=[];reg.forEach(L=>{const by=new Map();L.items.forEach(it=>{const c=col(it.x);if(!by.has(c))by.set(c,[]);by.get(c).push(it);});
+        by.forEach((its,c)=>{const sg=pdfSegFromItems(its,L.size);if(sg.text.trim())items.push({y:L.y,size:L.size,c,sg,line:pdfSegLine(L,sg)});});});
+      const cols=[...new Set(items.map(t=>t.c))];
+      const c0=items.filter(t=>t.c===0);
+      if(cols.length<2||(cols.length===2&&c0.length&&c0.every(t=>BUL.test(t.sg.text))))ok=false;   // chỉ là danh sách gạch đầu dòng
+      else{
+        const ys=[...new Set(items.map(t=>Math.round(t.y*2)/2))].sort((a,b)=>b-a),sz=Math.max(...items.map(t=>t.size));
+        const blocks=[];c0.sort((a,b)=>b.y-a.y).forEach(t=>{const bl=blocks[blocks.length-1];if(bl&&bl.bot-t.y<t.size*1.9)bl.bot=t.y;else blocks.push({top:t.y,bot:t.y,size:t.size});});
+        const cuts=[];
+        if(blocks.length)blocks.forEach((bl,k)=>{if(!k)return;
+          // ô căn trên: nhãn ngang hàng với dòng ĐẦU của một cột khác (phía trên dòng đó là khoảng trống)
+          if(items.some(t=>t.c>0&&Math.abs(t.y-bl.top)<2.5&&!items.some(u=>u.c===t.c&&u.y>t.y+1&&u.y-t.y<t.size*1.6))){cuts.push(bl.top+0.5);return;}
+          // ô căn giữa theo chiều dọc: chọn chỗ cắt (khoảng trống giữa hai nhãn) sao cho nhãn nằm giữa hàng của nó
+          const a=(blocks[k-1].top+blocks[k-1].bot)/2,b=(bl.top+bl.bot)/2,prevCut=cuts.length?cuts[cuts.length-1]:Infinity;let best=null;
+          for(let q=0;q+1<ys.length;q++){const y1=ys[q],y2=ys[q+1];if(y1<=a+0.5&&y2>=b-0.5&&y1>y2){const cut=(y1+y2)/2,inRow=items.filter(t=>t.y<prevCut&&t.y>cut);if(!inRow.length)continue;
+            const top=Math.max(...inRow.map(t=>t.y+t.size*0.7)),bot=Math.min(...inRow.map(t=>t.y));const score=Math.abs((top+bot)/2-(a+blocks[k-1].size*0.35))-(y1-y2)*0.01;
+            if(!best||score<best.s)best={s:score,y:cut};}}
+          if(best)cuts.push(best.y);});
+        else for(let q=0;q+1<ys.length;q++)if(ys[q]-ys[q+1]>sz*2.2)cuts.push((ys[q]+ys[q+1])/2);
+        const rowOf=y=>cuts.filter(c=>y<c).length;rows=[];
+        items.sort((a,b)=>b.y-a.y||a.sg.x0-b.sg.x0).forEach(t=>{const r=rowOf(t.y);rows[r]=rows[r]||new Map();const R=rows[r];if(!R.has(t.c))R.set(t.c,{x0:t.sg.x0,x1:t.sg.x1,lines:[]});const C=R.get(t.c);C.lines.push(t.line);C.x0=Math.min(C.x0,t.sg.x0);C.x1=Math.max(C.x1,t.sg.x1);});
+      }}
+    if(!ok){rest.push(L0);i++;continue;}
+    tables.push({top:reg[0].y,pg:reg[0].pg,rows:rows.filter(Boolean).map(r=>[...r.entries()].sort((a,b)=>a[0]-b[0]).map(e=>e[1]))});
+    i=j;}
+  return {tables,rest};
+}
 async function pdfReadLocal(buf,onProg){
   const lib=await loadVendor("vendor/pdf.min.js","pdfjsLib");
   lib.GlobalWorkerOptions.workerSrc=new URL("vendor/pdf.worker.min.js?v="+APP_VERSION,location.href).href;
   let doc;try{doc=await lib.getDocument({data:new Uint8Array(buf),isEvalSupported:false,disableFontFace:true}).promise;}
   catch(e){throw new Error(/password/i.test(e&&e.name||"")||/password/i.test(e&&e.message||"")?"File PDF có mật khẩu — nhờ khách gửi bản không khoá.":"Không mở được file PDF này.");}
-  const pageLines=[];let chars=0;
+  const pages=[];let chars=0;
   for(let p=1;p<=doc.numPages;p++){onProg&&onProg(p,doc.numPages);
     const page=await doc.getPage(p),vp=page.getViewport({scale:1});
     const tc=await page.getTextContent();
-    try{await page.getOperatorList();}catch(_){}   // nạp phông để biết đậm / nghiêng
+    let opl=null;try{opl=await page.getOperatorList();}catch(_){}   // nạp phông (đậm / nghiêng) + đường kẻ bảng
     const fontOf=id=>{try{return page.commonObjs.has(id)?page.commonObjs.get(id):null;}catch(_){return null;}};
-    const items=tc.items.filter(it=>it.str!==undefined&&(it.str.trim()||it.width>0)).map(it=>{
+    const items=tc.items.filter(it=>it.str!==undefined&&it.str.trim()&&Math.abs(it.transform[1])<=Math.abs(it.transform[0])*0.2+0.01).map(it=>{   // bỏ chữ xoay (watermark)
       const t=it.transform,size=Math.hypot(t[2],t[3])||it.height||10,f=fontOf(it.fontName)||{},nm=String(f.name||f.loadedName||"")+" "+String((tc.styles[it.fontName]||{}).fontFamily||"");
-      return {s:it.str,x:t[4],y:t[5],w:it.width,size,b:!!(f.bold||f.black||/bold|black|heavy|semibold|demi/i.test(nm)),i:!!(f.italic||/italic|oblique/i.test(nm))};});
-    // gom theo dòng (cùng toạ độ y)
-    items.sort((a,b)=>b.y-a.y||a.x-b.x);const lines=[];
-    for(const it of items){const L=lines.find(l=>Math.abs(l.y-it.y)<Math.max(2,Math.min(l.size,it.size)*0.45));if(L){L.items.push(it);L.size=Math.max(L.size,it.size);}else lines.push({y:it.y,size:it.size,items:[it]});}
-    lines.sort((a,b)=>b.y-a.y);
-    for(const L of lines){L.items.sort((a,b)=>a.x-b.x);const runs=[];let endX=null;
-      for(const it of L.items){let s=it.s;
-        if(endX!==null){const gap=it.x-endX;if(gap>L.size*2.2)s="\t"+s.replace(/^\s+/,"");else if(gap>L.size*0.18&&!/\s$/.test(runs.length?runs[runs.length-1].t:"")&&!/^\s/.test(s))s=" "+s;}
-        const last=runs[runs.length-1];if(last&&last.b===it.b&&last.i===it.i)last.t+=s;else runs.push({t:s,b:it.b,i:it.i});
-        endX=it.x+it.w;}
-      L.x0=L.items[0].x;L.x1=endX;L.runs=runs;L.text=runs.map(r=>r.t).join("").replace(/\s+$/,"");chars+=L.text.replace(/\s/g,"").length;}
-    pageLines.push({w:vp.width,h:vp.height,lines:lines.filter(l=>l.text.trim())});
+      const s0=it.str,lead=s0.length-s0.trimStart().length,trail=s0.length-s0.trimEnd().length,per=it.width/Math.max(1,s0.length);   // bỏ khoảng trắng đầu/cuối khỏi bề rộng
+      return {s:s0.trim(),x:t[4]+lead*per,y:t[5],w:Math.max(0.1,it.width-(lead+trail)*per),size,b:!!(f.bold||f.black||/bold|black|heavy|semibold|demi/i.test(nm)),i:!!(f.italic||/italic|oblique/i.test(nm))};});
+    items.forEach(it=>chars+=it.s.replace(/\s/g,"").length);
+    const bt=pdfBorderTables(items,pdfRules(opl,lib.OPS));
+    const tag=L=>Object.assign(L,{pg:p,pw:vp.width,ph:vp.height});
+    bt.tables.forEach(T=>{T.pg=p;T.rows.forEach(r=>r.forEach(c=>c.lines.forEach(tag)));});
+    const flow=pdfLines(bt.rest).map(tag);
+    const gt=pdfGridTables(flow);gt.tables.forEach(T=>T.pg=p);
+    pages.push({w:vp.width,h:vp.height,flow:gt.rest,tables:bt.tables.concat(gt.tables)});
   }
   try{doc.destroy();}catch(_){}
   // header / footer lặp lại trên nhiều trang, số trang
   const norm=t=>t.replace(/\d+/g,"#").replace(/\s+/g," ").trim().toLowerCase();
-  const edgeCount={};if(pageLines.length>=3)pageLines.forEach(pg=>{const seen=new Set();pg.lines.forEach(l=>{if(l.y>pg.h*0.9||l.y<pg.h*0.1){const k=norm(l.text);if(!seen.has(k)){seen.add(k);edgeCount[k]=(edgeCount[k]||0)+1;}}});});
-  const isJunk=(l,pg)=>{const edge=l.y>pg.h*0.9||l.y<pg.h*0.1,t=l.text.trim();
-    if(edge&&/^(trang|page)?\s*\d+\s*((\/|of|trên)\s*\d+)?$/i.test(t))return true;
-    if(edge&&/^[-–—]?\s*\d+\s*[-–—]?$/.test(t))return true;
-    return edge&&pageLines.length>=3&&edgeCount[norm(t)]>=Math.max(3,pageLines.length*0.5);};
-  const all=[];pageLines.forEach(pg=>pg.lines.forEach(l=>{if(!isJunk(l,pg))all.push({...l,pw:pg.w,ph:pg.h});}));
-  if(!all.length)return {html:"",pages:pageLines.length,chars};
+  const edge=(l,pg)=>l.y>pg.h*0.9||l.y<pg.h*0.1;
+  const edgeCount={};if(pages.length>=3)pages.forEach(pg=>{const seen=new Set();pg.flow.forEach(l=>{if(edge(l,pg)){const k=norm(l.text);if(!seen.has(k)){seen.add(k);edgeCount[k]=(edgeCount[k]||0)+1;}}});});
+  const isJunk=(l,pg)=>{const e=edge(l,pg),t=l.text.trim();
+    if(e&&/^(trang|page)?\s*\d+\s*((\/|of|trên)\s*\d+)?$/i.test(t))return true;
+    if(e&&/^[-–—]?\s*\d+\s*[-–—]?$/.test(t))return true;
+    return e&&pages.length>=3&&edgeCount[norm(t)]>=Math.max(3,pages.length*0.5);};
+  pages.forEach(pg=>{pg.flow=pg.flow.filter(l=>!isJunk(l,pg));});
   // cỡ chữ thân bài = cỡ phổ biến nhất (tính theo số ký tự)
-  const sz={};all.forEach(l=>{const k=Math.round(l.size*2)/2;sz[k]=(sz[k]||0)+l.text.length;});
+  const allLines=[];pages.forEach(pg=>{allLines.push(...pg.flow);pg.tables.forEach(T=>T.rows.forEach(r=>r.forEach(c=>allLines.push(...c.lines))));});
+  if(!allLines.length)return {html:"",pages:pages.length,chars};
+  const sz={};allLines.forEach(l=>{const k=Math.round(l.size*2)/2;sz[k]=(sz[k]||0)+l.text.length;});
   const body=+Object.entries(sz).sort((a,b)=>b[1]-a[1])[0][0];
-  const leftM=Math.min(...all.map(l=>l.x0)),rightM=Math.max(...all.map(l=>l.x1));
-  const BUL=/^\s*([•●▪■◦○►▶✓✔❖◆◇➢➤\-–—*·]|[-])\s*/,NUM=/^\s*(\d{1,2}[.)]|[a-z][.)])\s+/i;
-  const out=[];let para=null,prev=null,list=null;
-  const esc2=t=>esc(t);
-  const runsHtml=runs=>runs.map(r=>{let h=esc2(r.t);if(!h)return "";if(r.i)h=`<i>${h}</i>`;if(r.b)h=`<b>${h}</b>`;return h;}).join("");
-  const flush=()=>{if(!para)return;const inner=runsHtml(para.runs).replace(/\s+$/,"")||"<br>";
-    if(para.kind==="h")out.push(`${list?`</${list}>`:""}<h3>${runsHtml(para.runs.map(r=>({...r,b:false}))).replace(/\s+$/,"")}</h3>`),list=null;
-    else if(para.kind==="li"){if(list!==para.lt){if(list)out.push(`</${list}>`);out.push(`<${para.lt}>`);list=para.lt;}out.push(`<li>${inner}</li>`);}
-    else{if(list){out.push(`</${list}>`);list=null;}out.push(`<div${para.center?' style="text-align: center;"':""}>${inner}</div>`);}
-    para=null;};
-  for(const l of all){
-    const gap=prev&&prev.ph===l.ph&&prev.y>l.y?(prev.y-l.y):null;   // khoảng cách dòng (cùng trang)
-    const big=l.size>=body*1.18&&l.text.length<=90;
-    const allBold=l.runs.every(r=>r.b||!r.t.trim());
-    const mid=(l.x0+l.x1)/2,center=Math.abs(mid-l.pw/2)<l.pw*0.04&&(l.x0-leftM)>l.pw*0.08&&(l.x1-l.x0)<(rightM-leftM)*0.8;
-    let runs=l.runs.map(r=>({...r}));let kind="p",lt="";
-    const mB=l.text.match(BUL),mN=!mB&&l.text.match(NUM);
-    if(mB&&l.text.replace(BUL,"").trim()&&!/^\s*[-–—]\s*\d/.test(l.text)){kind="li";lt="ul";let cut=mB[0].length;while(cut>0&&runs.length){const r=runs[0],k=Math.min(cut,r.t.length);r.t=r.t.slice(k);cut-=k;if(!r.t)runs.shift();}}
-    else if(big||(allBold&&l.text.length<=60&&gap!==null&&gap>body*1.9))kind=big?"h":"p";
-    // ghép vào đoạn trước nếu là dòng bị xuống hàng tự động
-    const cont=para&&para.kind!=="h"&&kind==="p"&&!mN&&gap!==null&&gap<l.size*1.75&&Math.abs(l.size-prev.size)<0.6&&prev.x1>=leftM+(rightM-leftM)*0.82&&!center&&!para.center&&!/[:：]$/.test(prev.text)&&!/^\s*\d{1,2}[:h]\d{2}/.test(l.text);
-    const indentCont=para&&para.kind==="li"&&kind==="p"&&!mN&&gap!==null&&gap<l.size*1.75&&l.x0>prev.x0-1&&prev.x1>=leftM+(rightM-leftM)*0.75;
-    if(cont||indentCont){const last=para.runs[para.runs.length-1];const sep=/[-‐]$/.test(last?last.t:"")?"":" ";if(runs[0])runs[0].t=sep+runs[0].t.replace(/^\s+/,"");para.runs.push(...runs);}
-    else{flush();if(gap!==null&&gap>Math.max(l.size,prev.size)*2.1&&out.length&&kind!=="h")out.push((list?`</${list}>`:"")+"<div><br></div>"),list=null;
-      para={kind,lt,runs,center:kind==="p"&&center};}
-    prev=l;}
-  flush();if(list)out.push(`</${list}>`);
-  return {html:sanitizeHtml(out.join("").replace(/(<div><br><\/div>){2,}/g,"<div><br></div>")),pages:pageLines.length,chars};
+  const flowAll=pages.flatMap(pg=>pg.flow);
+  const flowBox=flowAll.length?{left:Math.min(...flowAll.map(l=>l.x0)),right:Math.max(...flowAll.map(l=>l.x1))}:{left:0,right:1};
+  const out=[];let list=null;
+  const closeList=()=>{if(list){out.push(`</${list}>`);list=null;}};
+  const blank=()=>{closeList();if(out.length&&out[out.length-1]!=="<div><br></div>")out.push("<div><br></div>");};
+  const runsHtml=rs=>{const runs=[];rs.forEach(r=>{const L=runs[runs.length-1];if(L&&!!L.b===!!r.b&&!!L.i===!!r.i)L.t+=r.t;else runs.push({...r});});return runs.map(r=>{let h=esc(r.t);if(!h)return "";if(r.i)h=`<i>${h}</i>`;if(r.b)h=`<b>${h}</b>`;return h;}).join("").replace(/\s+$/,"");};
+  const emit=(pa,mode="")=>{
+    if(pa.blank){blank();return;}
+    const inner=runsHtml(mode==="note"?pa.runs.map(r=>({...r,i:true})):pa.kind==="h"?pa.runs.map(r=>({...r,b:false})):pa.runs)||"";if(!inner)return;
+    if(pa.kind==="h"&&!mode){closeList();out.push(`<h3>${inner}</h3>`);return;}
+    if(pa.kind==="li"){const lt=pa.lt||"ul";if(list!==lt){closeList();out.push(`<${lt}>`);list=lt;}out.push(`<li>${inner}</li>`);return;}
+    closeList();out.push(`<div${pa.center&&!mode?' style="text-align: center;"':""}>${inner}</div>`);};
+  // dòng → đoạn (trong phạm vi một khối: cả trang hoặc một ô bảng)
+  const BUL=/^\s*([•●▪■◦○►▶✓✔❖◆◇➢➤\-–—*·+]|[-])\s*/,NUM=/^\s*(\d{1,2}[.)]|[a-z][.)])\s+/i;
+  const buildParas=(lines,box)=>{const paras=[];let para=null,prev=null;const W=Math.max(1,box.right-box.left);
+    for(const l of lines){
+      const samePg=prev&&prev.pg===l.pg,gap=samePg&&prev.y>l.y?(prev.y-l.y):null;
+      const big=l.size>=body*1.12&&l.text.length<=90;
+      const mid=(l.x0+l.x1)/2,center=Math.abs(mid-(box.left+box.right)/2)<W*0.05&&(l.x0-box.left)>W*0.1&&(l.x1-l.x0)<W*0.8;
+      let runs=l.runs.map(r=>({...r}));let kind=big?"h":"p",lt="";
+      const mB=l.text.match(BUL),mN=!mB&&l.text.match(NUM);
+      const firstWord=(l.text.trim().split(/\s+/)[0]||"");
+      const wrapped=prev&&(box.right-prev.x1)<firstWord.length*l.size*0.55+l.size*1.2&&!/\t/.test(prev.text);
+      const hyphenWrap=mB&&/^[-–—]$/.test(mB[1])&&wrapped&&para&&para.kind!=="li";
+      if(mB&&!hyphenWrap&&l.text.replace(BUL,"").trim()&&!/^\s*[-–—]\s*\d/.test(l.text)){kind="li";lt="ul";let cut=mB[0].length;while(cut>0&&runs.length){const r=runs[0],k=Math.min(cut,r.t.length);r.t=r.t.slice(k);cut-=k;if(!r.t)runs.shift();}}
+      // (wrapped = dòng trước bị xuống hàng tự động: chữ đầu dòng này lẽ ra đã vừa ở cuối dòng trước nếu còn chỗ)
+      const near=gap===null?(prev&&!samePg&&prev.pg===l.pg-1):gap<Math.max(l.size,prev.size)*1.75;
+      const cont=para&&para.kind!=="h"&&kind==="p"&&!mN&&near&&wrapped&&Math.abs(l.size-prev.size)<0.6&&!center&&!para.center&&!/[:：]$/.test(prev.text)&&!/^\s*\d{1,2}[:h]\d{2}\b/.test(l.text)&&!/\t/.test(l.text);
+      const contLi=para&&para.kind==="li"&&kind==="p"&&!mN&&near&&wrapped&&l.x0>prev.x0-2;
+      if(cont||contLi){const last=para.runs[para.runs.length-1];const sep=/\p{L}[-‐]$/u.test(last?last.t:"")||(/[\d:.,/]$/.test(last?last.t:"")&&/^\d/.test(l.text.trim())&&l.text.trim().length<=3)?"":" ";if(runs[0])runs[0].t=sep+runs[0].t.replace(/^\s+/,"");para.runs.push(...runs);}
+      else{if(gap!==null&&gap>Math.max(l.size,prev.size)*2.1&&paras.length&&kind!=="h")paras.push({blank:true});
+        para={kind,lt,runs,center:kind==="p"&&center};paras.push(para);}
+      prev=l;}
+    return paras;};
+  const HEAD=/^(stt|tt|thời gian|giờ|time|nội dung|content|lời dẫn|lời dẫn mc|lời mc|mc|kịch bản|script|ghi chú|note|notes|phụ trách|người phụ trách|người thực hiện|thực hiện|hạng mục|phần|mục|chương trình|nội dung chương trình|tiết mục|âm thanh|ánh sáng|sân khấu|ekip|bộ phận|chi tiết|hoạt động)$/i;
+  let lastShortRow=false;
+  const emitTable=T=>{T.rows.forEach((row,ri)=>{
+    const cells=row.map(c=>{const box={left:Math.min(...c.lines.map(l=>l.x0)),right:Math.max(...c.lines.map(l=>l.x1))};const paras=buildParas(c.lines,box).filter(p=>!p.blank);return {paras,text:paras.map(p=>p.runs.map(r=>r.t).join("")).join(" ").replace(/\s+/g," ").trim(),n:c.lines.length};}).filter(c=>c.text);
+    if(!cells.length)return;
+    if(ri===0&&T.rows.length>1&&cells.length>=2&&cells.every(c=>c.text.length<=30&&(HEAD.test(c.text.replace(/[:.]$/,""))||(c.text===c.text.toUpperCase()&&/\p{L}/u.test(c.text)))))return;   // hàng tiêu đề cột
+    const short=cells.every(c=>c.text.length<=70&&c.n<=2);
+    if(short&&cells.length>=2){if(!lastShortRow)blank();closeList();out.push(`<div>${cells.map((c,k)=>{const h=esc(c.text);return k===0&&cells.length>2?`<b>${h}</b>`:h;}).join(" — ")}</div>`);lastShortRow=true;return;}
+    if(short&&cells.length===1){if(!lastShortRow)blank();cells[0].paras.forEach(p=>emit(p));lastShortRow=true;return;}
+    blank();lastShortRow=false;
+    let mi=0;cells.forEach((c,k)=>{if(c.text.length>cells[mi].text.length)mi=k;});
+    const labels=cells.slice(0,mi),notes=cells.slice(mi+1);
+    if(labels.length){closeList();out.push(`<div><b>${labels.map(c=>esc(c.text)).join(" · ")}</b></div>`);}
+    cells[mi].paras.forEach(p=>emit(p));
+    notes.forEach(c=>c.paras.forEach(p=>{const q={...p,kind:p.kind==="h"?"p":p.kind};if(q.runs.length&&q.kind!=="li"){q.runs=[{t:"(",i:true},...q.runs,{t:")",i:true}];}emit(q,"note");}));
+    blank();});};
+  // thứ tự đọc: theo trang, trên → dưới; văn bản thường và bảng xen kẽ đúng vị trí
+  let chunk=[];
+  const flushChunk=()=>{if(chunk.length){buildParas(chunk,flowBox).forEach(p=>emit(p));lastShortRow=false;}chunk=[];};
+  pages.forEach(pg=>{const ents=[...pg.flow.map(l=>({y:l.y,l})),...pg.tables.map(T=>({y:T.top+0.01,T}))].sort((a,b)=>b.y-a.y);
+    for(const e of ents){if(e.l)chunk.push(e.l);else{flushChunk();emitTable(e.T);}}});
+  flushChunk();closeList();
+  while(out.length&&out[0]==="<div><br></div>")out.shift();while(out.length&&out[out.length-1]==="<div><br></div>")out.pop();
+  return {html:sanitizeHtml(out.join("")),pages:pages.length,chars};
 }
-
 // ---- Xuất PDF (A4, chữ thật — bôi đen / tìm kiếm được) ----
 async function buildNotePdf(n){
   const [PL,fk]=await Promise.all([loadVendor("vendor/pdf-lib.min.js","PDFLib"),loadVendor("vendor/fontkit.umd.min.js","fontkit")]);
