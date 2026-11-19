@@ -1,5 +1,5 @@
 
-const APP_VERSION="V28.17";
+const APP_VERSION="V28.18";
 // V28.0: app chạy trên GitHub Pages; dữ liệu + thông báo nằm trên máy chủ Cloudflare riêng (mcta-push).
 const CLOUD_DEFAULT="https://mcta-push.hoangtourguide0507.workers.dev";
 const KEY="freelance_planner_v12";
@@ -1371,6 +1371,27 @@ let rteTypingTimer=null;
 function rteTyping(on){const f=document.querySelector("#modalCard form.note-editor");if(!f)return;clearTimeout(rteTypingTimer);
   if(on){f.classList.add("typing");setTimeout(fitEditor,50);}
   else rteTypingTimer=setTimeout(()=>{if(document.activeElement===rteEl())return;f.classList.remove("typing");const pal=document.getElementById("nePalette");if(pal)pal.hidden=true;fitEditor();},180);}
+// V28.18 — iPad/iPhone: đôi lúc chạm vào kịch bản mà bàn phím không hiện. Nguyên nhân: vùng soạn vẫn đang "được chọn" (focus)
+// nhưng bàn phím đã đóng (gập bao iPad / khoá màn hình / chuyển app / bấm nút ẩn bàn phím). Chạm lại vào chỗ đã focus thì
+// Safari không mở bàn phím nữa. Cách xử lý: (1) rời app → bỏ focus; (2) chạm vào kịch bản khi bàn phím không hiện → bỏ focus
+// rồi focus lại ngay trong lần chạm (iOS chỉ mở bàn phím khi focus nằm trong một lần chạm), con trỏ đặt đúng chỗ vừa chạm.
+function kbOpen(){const vv=window.visualViewport;return !!vv&&vv.height<window.innerHeight-120;}
+function blurEditable(){const a=document.activeElement;if(a&&a!==document.body&&(a.isContentEditable||/^(INPUT|TEXTAREA)$/.test(a.tagName))){try{a.blur();}catch(_){}}}
+document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="hidden")blurEditable();else setTimeout(()=>{if(!kbOpen())blurEditable();},250);});
+window.addEventListener("pagehide",blurEditable);
+(function rteTapKeyboard(){
+  let s=null,lastTap=0;
+  document.addEventListener("touchstart",e=>{s=null;const b=rteEl();if(!b||e.touches.length!==1||!b.contains(e.target))return;
+    const t=e.touches[0],sel=getSelection();s={x:t.clientX,y:t.clientY,at:Date.now(),focused:document.activeElement===b,range:!!(sel&&sel.rangeCount&&!sel.isCollapsed)};},{passive:true,capture:true});
+  document.addEventListener("touchend",e=>{const b=rteEl(),st=s;s=null;if(!b||!st)return;
+    const t=e.changedTouches&&e.changedTouches[0],now=Date.now(),dbl=now-lastTap<400;lastTap=now;
+    if(!t||!st.focused||st.range||dbl||now-st.at>350||Math.hypot(t.clientX-st.x,t.clientY-st.y)>10)return;   // chỉ chạm nhanh 1 lần (không phải kéo, chạm đúp, nhấn giữ, chỉnh vùng chọn)
+    if(kbOpen()||document.activeElement!==b)return;   // bàn phím đang hiện → để iOS tự xử lý
+    let r=null;try{r=document.caretRangeFromPoint?document.caretRangeFromPoint(t.clientX,t.clientY):null;}catch(_){}
+    b.blur();b.focus({preventScroll:true});
+    if(r&&b.contains(r.startContainer)){const sel=getSelection();sel.removeAllRanges();sel.addRange(r);}
+  },{passive:true,capture:true});
+})();
 // Đếm chữ + thời gian đọc ước tính (khoảng 150 tiếng/phút)
 let rteStatTimer=null;
 function rteStat(){const e=rteEl(),st=document.getElementById("neStat");if(!e||!st)return;const w=(e.innerText||"").trim().split(/\s+/).filter(Boolean).length;
