@@ -1,5 +1,5 @@
 
-const APP_VERSION="V28.18";
+const APP_VERSION="V28.19";
 // V28.0: app chạy trên GitHub Pages; dữ liệu + thông báo nằm trên máy chủ Cloudflare riêng (mcta-push).
 const CLOUD_DEFAULT="https://mcta-push.hoangtourguide0507.workers.dev";
 const KEY="freelance_planner_v12";
@@ -1382,7 +1382,8 @@ window.addEventListener("pagehide",blurEditable);
 (function rteTapKeyboard(){
   let s=null,lastTap=0;
   document.addEventListener("touchstart",e=>{s=null;const b=rteEl();if(!b||e.touches.length!==1||!b.contains(e.target))return;
-    const t=e.touches[0],sel=getSelection();s={x:t.clientX,y:t.clientY,at:Date.now(),focused:document.activeElement===b,range:!!(sel&&sel.rangeCount&&!sel.isCollapsed)};},{passive:true,capture:true});
+    const t=e.touches[0],sel=getSelection();if(t.touchType==="stylus")return;   // bút: iPad dùng chế độ viết tay (Scribble), không can thiệp
+    s={x:t.clientX,y:t.clientY,at:Date.now(),focused:document.activeElement===b,range:!!(sel&&sel.rangeCount&&!sel.isCollapsed)};},{passive:true,capture:true});
   document.addEventListener("touchend",e=>{const b=rteEl(),st=s;s=null;if(!b||!st)return;
     const t=e.changedTouches&&e.changedTouches[0],now=Date.now(),dbl=now-lastTap<400;lastTap=now;
     if(!t||!st.focused||st.range||dbl||now-st.at>350||Math.hypot(t.clientX-st.x,t.clientY-st.y)>10)return;   // chỉ chạm nhanh 1 lần (không phải kéo, chạm đúp, nhấn giữ, chỉnh vùng chọn)
@@ -1392,6 +1393,15 @@ window.addEventListener("pagehide",blurEditable);
     if(r&&b.contains(r.startContainer)){const sel=getSelection();sel.removeAllRanges();sel.addRange(r);}
   },{passive:true,capture:true});
 })();
+// V28.19 — Bút (Apple Pencil / bút cảm ứng tương thích): khi chạm vào ô chữ bằng bút, iPadOS bật "Viết tay" (Scribble) thay vì
+// mở bàn phím — đây là cách iPad hoạt động, web app không đổi được. Hiện hướng dẫn ngắn ngay trong màn soạn (đến khi bấm Đã hiểu).
+const PEN_HINT="mcta_pen_hint";
+function penHintOff(){try{localStorage.setItem(PEN_HINT,"1");}catch(_){}document.getElementById("nePenHint")?.remove();}
+document.addEventListener("pointerdown",e=>{const b=rteEl();if(e.pointerType!=="pen"||!b||!b.contains(e.target))return;
+  try{if(localStorage.getItem(PEN_HINT))return;}catch(_){}
+  setTimeout(()=>{if(kbOpen()||document.getElementById("nePenHint")||!rteEl())return;const dock=document.querySelector("#modalCard .ne-dock");if(!dock)return;
+    dock.insertAdjacentHTML("afterbegin",`<div class="ne-pen" id="nePenHint"><b>✏️ Đang dùng bút</b><span>iPad bật chế độ <b>viết tay</b> nên không hiện bàn phím. Muốn gõ phím: <b>chạm bằng ngón tay</b> vào chỗ cần sửa (bút vẫn dùng để bôi chọn chữ được), hoặc bấm biểu tượng bàn phím ⌨︎ trên thanh nhỏ của iPad.</span><button type="button" class="ne-pen-ok" onclick="penHintOff()">Đã hiểu</button></div>`);},700);
+},{passive:true,capture:true});
 // Đếm chữ + thời gian đọc ước tính (khoảng 150 tiếng/phút)
 let rteStatTimer=null;
 function rteStat(){const e=rteEl(),st=document.getElementById("neStat");if(!e||!st)return;const w=(e.innerText||"").trim().split(/\s+/).filter(Boolean).length;

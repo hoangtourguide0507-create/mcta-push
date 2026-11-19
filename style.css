@@ -1098,3 +1098,8 @@ button{color:inherit}
 .section-head:has(.notes-head-btns){flex-wrap:wrap;row-gap:10px}
 .section-head .notes-head-btns{flex:1 1 100%}
 .notes-head-btns>button{flex:1;white-space:nowrap;justify-content:center}
+/* V28.19: hướng dẫn khi dùng bút (Scribble) */
+.ne-pen{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;margin:0 0 8px;padding:10px 12px;border-radius:14px;background:var(--purple-soft);border:1px solid var(--purple);font-size:13px;line-height:1.45;color:var(--ink)}
+.ne-pen>b{font-size:14px}
+.ne-pen span{flex:1 1 100%}
+.ne-pen-ok{margin-left:auto;border:0;border-radius:10px;padding:7px 14px;font:inherit;font-weight:800;background:var(--purple);color:#fff;cursor:pointer}
