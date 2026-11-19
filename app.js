@@ -1,5 +1,5 @@
 
-const APP_VERSION="V28.16";
+const APP_VERSION="V28.17";
 // V28.0: app chạy trên GitHub Pages; dữ liệu + thông báo nằm trên máy chủ Cloudflare riêng (mcta-push).
 const CLOUD_DEFAULT="https://mcta-push.hoangtourguide0507.workers.dev";
 const KEY="freelance_planner_v12";
@@ -774,7 +774,7 @@ notes(){
  const days={"7":7,"30":30,"90":90}[noteRange];if(days)arr=arr.filter(n=>noteTime(n)>=Date.now()-days*86400000);
  arr.sort((a,b)=>{if(noteSort==="az")return (a.title||"").localeCompare(b.title||"","vi");if(noteSort==="show"){const ja=noteJob(a),jb=noteJob(b);return (ja?ja.date+(ja.time||""):"9999").localeCompare(jb?jb.date+(jb.time||""):"9999");}if(noteSort==="created")return (b.createdAt||"").localeCompare(a.createdAt||"");return noteTime(b)-noteTime(a);});
  const chip=(v,l)=>`<button class="filter ${noteFilter===v?"active":""}" onclick="noteFilter='${v}';render()">${l}</button>`;
- return `<div class="section-head"><span class="small"><b>${state.notes.length}</b> kịch bản · ${state.notes.filter(n=>noteJob(n)).length} đã gắn job</span><span class="notes-head-btns"><button class="outline-btn pdf-in-btn" onclick="pdfImport()">📄 Nhập PDF</button><button class="black-btn" onclick="openNote()">${icon("plus",15)} Viết mới</button></span></div>
+ return `<div class="section-head"><span class="small"><b>${state.notes.length}</b> kịch bản · ${state.notes.filter(n=>noteJob(n)).length} đã gắn job</span><span class="notes-head-btns"><button class="outline-btn pdf-in-btn" onclick="scriptImport()">📥 Nhập kịch bản</button><button class="black-btn" onclick="openNote()">${icon("plus",15)} Viết mới</button></span></div>
  <div class="search-wrap"><span>${icon("search",17)}</span><input class="search" id="noteSearchInput" value="${esc(noteSearch)}" placeholder="Tìm tiêu đề, nội dung, tên job…" oninput="noteSearch=this.value;render();const el=document.getElementById('noteSearchInput');el.focus();el.setSelectionRange(el.value.length,el.value.length)"></div>
  <div class="filter-row">${chip("all","Tất cả")}${chip("upcoming","Job sắp diễn ra")}${chip("linked","Đã gắn job")}${chip("free","Chưa gắn job")}</div>
  <div class="note-tools"><select class="field-control" onchange="noteSort=this.value;render()"><option value="edited" ${noteSort==="edited"?"selected":""}>Mới sửa gần đây</option><option value="created" ${noteSort==="created"?"selected":""}>Mới tạo</option><option value="show" ${noteSort==="show"?"selected":""}>Theo ngày diễn ra</option><option value="az" ${noteSort==="az"?"selected":""}>Tên A → Z</option></select><select class="field-control" onchange="noteRange=this.value;render()"><option value="all" ${noteRange==="all"?"selected":""}>Mọi thời gian</option><option value="7" ${noteRange==="7"?"selected":""}>Sửa trong 7 ngày</option><option value="30" ${noteRange==="30"?"selected":""}>Sửa trong 30 ngày</option><option value="90" ${noteRange==="90"?"selected":""}>Sửa trong 90 ngày</option></select></div>
@@ -1082,7 +1082,7 @@ function openJob(id){
  ${(()=>{const ms=jobMeetings(j);const tNow=new Date();tNow.setHours(0,0,0,0);return `<section class="section compact meeting-detail"><div class="section-head"><h3>Lịch họp</h3><button class="text-btn" onclick="openJobForm(state.jobs.find(x=>x.id==='${j.id}'));setTimeout(()=>document.querySelector('.meeting-box')?.scrollIntoView({behavior:'smooth'}),150)">${ms.length?"Cập nhật":"＋ Thêm"}</button></div>${ms.length?ms.map(m=>{const past=new Date(m.date+"T00:00:00")<tNow;const rem=(m.reminders||[]).filter(r=>r.enabled!==false);const href=m.mode==="Online"?safeHref(m.link):"";return `<div class="meeting-card ${past?"past":""}"><div class="meeting-when"><b>${esc(fmtLong(m.date))}${m.time?` • ${esc(m.time)}`:""}</b><span class="meet-mode meet-${m.mode==="Online"?"on":"off"}">${esc(m.mode)}</span></div><div class="meeting-where">${icon(m.mode==="Online"?"link":"pin",13)} ${esc(meetingWhere(m))}</div>${m.note?`<div class="small">${esc(m.note)}</div>`:""}<div class="meeting-actions">${m.mode==="Online"&&href?`<a class="map-link" href="${esc(href)}" target="_blank" rel="noopener">${icon("link",14)} Mở link họp</a>`:""}${m.mode!=="Online"&&m.place?`<a class="map-link" href="${esc(directionsUrl(m.place))}" target="_blank" rel="noopener">${icon("pin",14)} Chỉ đường</a><button type="button" class="map-link link-btn" onclick="copyText(this.dataset.q,this)" data-q="${esc(m.place)}">Copy địa chỉ</button>`:""}</div><div class="push-status small"><span class="push-dot ${rem.length?"on":""}"></span>${past?"Đã qua":rem.length?"Nhắc "+rem.map(x=>`trước ${labelMinutes(x.minutes)}`).join(" • "):"Không nhắc"}</div></div>`}).join(""):'<div class="empty">Chưa có lịch họp.</div>'}</section>`})()}
  <section class="section compact script-detail-section"><div class="section-head"><h3>Kịch bản</h3>${workNeedsAttention(j)?`<span class="work-mini warn">${esc(workLabel(j))}</span>`:`<span class="work-mini ok">${j.noScript&&!linkedNotes(j).length?"Không cần kịch bản":"Đã đủ"}</span>`}</div>
  <div class="job-scripts">${linkedNotes(j).sort((a,b)=>noteTime(b)-noteTime(a)).map(n=>`<div class="job-script-row"><div><b>${noteKind(n)==="lovestory"?'<i class="ls-tag">Love Story</i> ':""}${esc(n.title||"(Không tiêu đề)")}</b><span>${noteTime(n)?`Sửa ${esc(relTime(noteTime(n)))}`:"&nbsp;"}</span></div><button class="rd-btn" onclick="closeModal();openReader('${n.id}')">Đọc</button><button class="rd-btn" onclick="openJobAfterNote=true;openNote(state.notes.find(x=>x.id==='${n.id}'))">Sửa</button></div>`).join("")}
- <div class="job-script-adds"><button class="outline-btn job-script-add" onclick="openJobAfterNote=true;openNote(null,{jobId:'${j.id}'})">＋ Viết kịch bản</button><button class="outline-btn job-script-add" onclick="pdfImport('${j.id}')">📄 Nhập PDF</button>${isWedding(j)?`<button class="outline-btn job-script-add" onclick="openJobAfterNote=true;openNote(null,{jobId:'${j.id}',kind:'lovestory'})">＋ Viết Love Story</button>`:""}</div>
+ <div class="job-script-adds"><button class="outline-btn job-script-add" onclick="openJobAfterNote=true;openNote(null,{jobId:'${j.id}'})">＋ Viết kịch bản</button><button class="outline-btn job-script-add" onclick="scriptImport('${j.id}')">📥 Nhập kịch bản</button>${isWedding(j)?`<button class="outline-btn job-script-add" onclick="openJobAfterNote=true;openNote(null,{jobId:'${j.id}',kind:'lovestory'})">＋ Viết Love Story</button>`:""}</div>
  ${(j.scriptLink||j.scriptNotes||j.loveStoryLink||j.loveStoryNotes)?`<details class="legacy-script"><summary>Link / ghi chú nhập trước đây</summary>${j.scriptLink?`<a class="script-link" href="${esc(safeHref(j.scriptLink)||"#")}" target="_blank" rel="noopener">${icon("link",14)} File kịch bản</a>`:""}${j.scriptNotes?`<div class="note-body script-note">${esc(j.scriptNotes)}</div>`:""}${j.loveStoryLink?`<a class="script-link" href="${esc(safeHref(j.loveStoryLink)||"#")}" target="_blank" rel="noopener">${icon("link",14)} File Love Story</a>`:""}${j.loveStoryNotes?`<div class="note-body script-note"><b>Love Story:</b> ${esc(j.loveStoryNotes)}</div>`:""}</details>`:""}
  </div></section>
  ${isWedding(j)||j.lsCode?`<section class="section compact ls-section"><div class="section-head"><h3>💌 Love Story</h3>${j.lsCode?`<button class="text-btn" onclick="LS.at=0;hydrateLoveStory(state.jobs.find(x=>x.id==='${j.id}'))">Làm mới</button>`:""}</div><div id="lsWrap"></div></section>`:""}
@@ -1516,13 +1516,13 @@ function pdfImport(jobId=""){
   inp.onchange=()=>{const f=inp.files&&inp.files[0];inp.remove();if(f)pdfImportSheet(f,jobId);};
   document.body.appendChild(inp);inp.click();
 }
-function pdfTitleOf(name){return String(name||"").replace(/\.pdf$/i,"").replace(/[_]+/g," ").replace(/\s+/g," ").trim().slice(0,90)||"Kịch bản từ PDF";}
+function pdfTitleOf(name){return String(name||"").replace(/\.(pdf|docx?|xlsx?)$/i,"").replace(/[_]+/g," ").replace(/\s+/g," ").trim().slice(0,90)||"Kịch bản từ PDF";}
 function fmtBytes(b){return b>=1048576?(b/1048576).toFixed(1).replace(".",",")+" MB":Math.max(1,Math.round(b/1024))+" KB";}
 function pdfImportSheet(file,jobId){
   if(!/pdf$/i.test(file.type||"")&&!/\.pdf$/i.test(file.name||"")){alert("File này không phải PDF.");return;}
   if(file.size>PDF_MAX_MB*1048576){alert(`File lớn quá (${fmtBytes(file.size)}). Tối đa ${PDF_MAX_MB} MB.`);return;}
   pdfPick={file,jobId,busy:false};
-  openModal(`<div class="sheet-head"><div><div class="eyebrow">NHẬP PDF</div><h2>Đọc kịch bản từ PDF</h2></div><button class="close" onclick="pdfCancel()">×</button></div>
+  openModal(`<div class="sheet-head"><div><div class="eyebrow">NHẬP KỊCH BẢN · PDF</div><h2>Đọc kịch bản từ PDF</h2></div><button class="close" onclick="pdfCancel()">×</button></div>
    <div class="pdf-file"><span class="pdf-ico">PDF</span><div><b>${esc(file.name||"kich-ban.pdf")}</b><span>${fmtBytes(file.size)}${jobId&&state.jobs.find(j=>j.id===jobId)?` · gắn vào ${esc(state.jobs.find(j=>j.id===jobId).title)}`:""}</span></div></div>
    <div class="pdf-opts">
     <button type="button" class="pdf-opt" id="pdfOptLocal" onclick="pdfRun('local')"><b>⚡ Đọc trên máy</b><span>Vài giây, không cần mạng, file không gửi đi đâu. Hợp với PDF xuất từ Word / Google Docs.</span></button>
@@ -1551,12 +1551,320 @@ async function pdfRun(mode){
       if(r.partial)showToast("File dài — Gemini chỉ đọc được phần đầu, kiểm tra phần cuối nhé");
     }
     if(!htmlToText(html).trim()){done();pdfStatus("Không đọc được nội dung từ file này.","warn");return;}
-    pdfPick=null;closeModal();
-    if(P.jobId)openJobAfterNote=true;
-    openNote({id:"",title:pdfTitleOf(P.file.name),html,jobId:P.jobId||"",kind:"script"},{fresh:true});
-    noteDirty=true;noteAutoSoon();
-    showToast(`Đã nhập ${pages?pages+" trang ":""}bằng ${via} ✓ — xem lại nội dung nhé`);
+    pdfPick=null;finishImport(html,pdfTitleOf(P.file.name),`PDF (${pages?pages+" trang, ":""}đọc bằng ${via})`,P.jobId||"");
   }catch(e){done();pdfStatus(esc(e&&e.message||"Lỗi đọc PDF"),"err");}
+}
+// ---- V28.17: Nhập kịch bản — link Google Tài liệu / Trang tính / Drive, file Word (.docx, .doc), Excel (.xlsx), PDF ----
+// Word / Excel / Google đọc ngay trên máy (fflate giải nén .docx/.xlsx). Link Google được máy chủ Cloudflare tải hộ (trình duyệt không tải trực tiếp được).
+const IMP_MAX_MB=15;
+let impJob="";
+function scriptImport(jobId=""){impJob=jobId||"";
+  const j=impJob&&state.jobs.find(x=>x.id===impJob);
+  openModal(`<div class="sheet-head"><div><div class="eyebrow">NHẬP KỊCH BẢN</div><h2>Lấy kịch bản khách gửi</h2></div><button class="close" onclick="closeModal()">×</button></div>
+   ${j?`<p class="small imp-job">Gắn vào <b>${esc(j.title)}</b></p>`:""}
+   <label class="imp-lbl" for="impUrl">🔗 Link Google Tài liệu, Trang tính hoặc Drive</label>
+   <div class="imp-link"><input id="impUrl" type="url" inputmode="url" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Dán link docs.google.com/…" onkeydown="if(event.key==='Enter'){event.preventDefault();importFromLink()}"><button type="button" class="black-btn" id="impGo" onclick="importFromLink()">Lấy</button></div>
+   <div class="imp-or"><span>hoặc</span></div>
+   <button type="button" class="pdf-opt" id="impFileBtn" onclick="importPickFile()"><b>📁 Chọn file</b><span>Word (.docx, .doc), Excel (.xlsx) hoặc PDF — lưu file từ Zalo / Mail vào ứng dụng Tệp trước.</span></button>
+   <div class="pdf-status" id="pdfStatus" aria-live="polite"></div>
+   <p class="small pdf-note">Link Google cần mở chia sẻ: <b>Chia sẻ → Bất kỳ ai có đường liên kết</b>. Nội dung thành kịch bản mới để sửa như bình thường; file gốc giữ nguyên.</p>`);
+}
+function importPickFile(){
+  const inp=document.createElement("input");inp.type="file";inp.style.display="none";
+  inp.accept=".pdf,.docx,.doc,.xlsx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+  inp.onchange=()=>{const f=inp.files&&inp.files[0];inp.remove();if(f)importFile(f);};
+  document.body.appendChild(inp);inp.click();
+}
+function impBusy(on){["impGo","impFileBtn","impUrl"].forEach(id=>{const el=document.getElementById(id);if(el)el.disabled=!!on;});}
+function impSniff(u8,name=""){
+  if(u8[0]===0x25&&u8[1]===0x50&&u8[2]===0x44&&u8[3]===0x46)return "pdf";
+  if(u8[0]===0x50&&u8[1]===0x4b)return "zip";
+  if(u8[0]===0xd0&&u8[1]===0xcf&&u8[2]===0x11&&u8[3]===0xe0)return "cfb";
+  if(/\.pdf$/i.test(name))return "pdf";
+  return "";
+}
+async function importFile(file,title){
+  if(file.size>IMP_MAX_MB*1048576){pdfStatus(`File lớn quá (${fmtBytes(file.size)}). Tối đa ${IMP_MAX_MB} MB.`,"err");return;}
+  const name=title||file.name||"kich-ban";
+  impBusy(true);
+  try{
+    const u8=new Uint8Array(await file.arrayBuffer());const kind=impSniff(u8,name);
+    if(kind==="pdf"){impBusy(false);pdfImportSheet(file.type==="application/pdf"||/\.pdf$/i.test(file.name||"")?file:new File([u8],pdfTitleOf(name)+".pdf",{type:"application/pdf"}),impJob);return;}
+    pdfStatus('<span class="spin"></span> Đang đọc file…');
+    let r;
+    if(kind==="zip"){
+      const fz=await loadVendor("vendor/fflate.min.js","fflate");let files;
+      try{files=fz.unzipSync(u8,{filter:f=>/^(word\/(document|styles|numbering)\.xml|xl\/(workbook\.xml|_rels\/workbook\.xml\.rels|sharedStrings\.xml|styles\.xml|worksheets\/[^/]+\.xml)|docProps\/core\.xml)$/.test(f.name)});}
+      catch(_){throw new Error("File bị hỏng hoặc không phải Word / Excel.");}
+      if(files["word/document.xml"])r=docxToBlocks(files);
+      else if(files["xl/workbook.xml"])r=xlsxToBlocks(files);
+      else throw new Error("Chưa đọc được loại file này. Hãy lưu thành Word (.docx) hoặc PDF.");
+    }else if(kind==="cfb")r=docToBlocks(u8);
+    else throw new Error("Chưa đọc được loại file này. Chọn file Word (.docx, .doc), Excel (.xlsx) hoặc PDF.");
+    const html=renderImportBlocks(r.blocks);
+    if(!htmlToText(html).trim()){impBusy(false);pdfStatus("Không thấy nội dung chữ trong file này.","warn");return;}
+    finishImport(html,pdfTitleOf(name),r.via);
+  }catch(e){impBusy(false);pdfStatus(esc(e&&e.message||"Lỗi đọc file"),"err");}
+}
+function finishImport(html,title,via,jobId=impJob){
+  closeModal();if(jobId)openJobAfterNote=true;
+  openNote({id:"",title:title||"Kịch bản",html,jobId:jobId||"",kind:"script"},{fresh:true});
+  noteDirty=true;noteAutoSoon();
+  showToast(`Đã nhập kịch bản${via?" từ "+via:""} ✓ — xem lại nội dung nhé`);
+}
+function impLinkKind(u){
+  let x;try{x=new URL(String(u).trim());}catch(_){return "";}
+  if(!/(^|\.)google\.com$/i.test(x.hostname))return "";
+  if(/\/document\/d\//.test(x.pathname))return "Google Tài liệu";
+  if(/\/spreadsheets\/d\//.test(x.pathname))return "Google Trang tính";
+  if(/\/presentation\/d\//.test(x.pathname))return "Google Trang trình bày";
+  if(/drive\.google\.com|drive\.usercontent\.google\.com/i.test(x.hostname))return "Google Drive";
+  return "";
+}
+async function importFromLink(){
+  const inp=document.getElementById("impUrl");const u=(inp&&inp.value||"").trim();
+  if(!u){pdfStatus("Dán link Google Tài liệu / Trang tính vào ô trên.","warn");inp&&inp.focus();return;}
+  const src=impLinkKind(u);
+  if(!src){pdfStatus("Link chưa đúng — cần link <b>docs.google.com</b> (Tài liệu, Trang tính) hoặc <b>drive.google.com</b>.","warn");return;}
+  if(!accessKey()){pdfStatus("Chưa kết nối máy chủ — vào Khác → Đồng bộ để nhập mã truy cập.","err");return;}
+  impBusy(true);pdfStatus(`<span class="spin"></span> Đang tải từ ${src}…`);
+  try{
+    let r;try{r=await fetch(cloudUrl()+"/fetchdoc",{method:"POST",headers:{"Content-Type":"application/json","x-app-key":accessKey()},body:JSON.stringify({url:u})});}
+    catch(_){throw new Error("Không kết nối được máy chủ — kiểm tra mạng rồi thử lại.");}
+    if(!r.ok||/json/i.test(r.headers.get("content-type")||"")){const j=await r.json().catch(()=>({}));throw new Error(j.loi||"Không tải được tài liệu này.");}
+    let name="";try{name=decodeURIComponent(r.headers.get("x-filename")||"");}catch(_){}
+    const blob=await r.blob();
+    impBusy(false);
+    await importFile(new File([blob],name||"kich-ban",{type:blob.type||""}),name||src);
+  }catch(e){impBusy(false);pdfStatus(esc(e&&e.message||"Không tải được tài liệu"),"err");}
+}
+
+// ---- dựng HTML chung từ khối: đoạn văn & bảng (dùng cho Word / Excel / Google) ----
+// para = {kind:'p'|'h'|'li', runs:[{t,b,i,u,s,c,h}], al:'center'|'right'|''}; bảng = {type:'table', rows:[{head:bool, cells:[[para…]…]}]}
+const IMP_HEAD=/^(stt|tt|thời gian|giờ|time|nội dung|content|lời dẫn|lời dẫn mc|lời mc|mc|kịch bản|script|ghi chú|note|notes|phụ trách|người phụ trách|người thực hiện|thực hiện|hạng mục|phần|mục|chương trình|nội dung chương trình|tiết mục|âm thanh|ánh sáng|sân khấu|ekip|bộ phận|chi tiết|hoạt động|nhiệm vụ|thứ tự|chú ý|lưu ý|nội dung dẫn chương trình|người dẫn|yêu cầu|đạo cụ|thời lượng|nhạc|music|lighting|sound|duration|remarks?|cue|segment|activity|pic|in charge)$/i;
+function renderImportBlocks(blocks){
+  const out=[];let list=null,lastShort=false;
+  const closeList=()=>{if(list){out.push(`</${list}>`);list=null;}};
+  const blank=()=>{closeList();if(out.length&&out[out.length-1]!=="<div><br></div>")out.push("<div><br></div>");};
+  const ptext=p=>p.runs.map(r=>r.t).join("");
+  const runsHtml=rs=>{const runs=[];rs.forEach(r=>{const L=runs[runs.length-1],k=x=>[!!x.b,!!x.i,!!x.u,!!x.s,x.c||"",x.h||""].join("|");if(L&&k(L)===k(r))L.t+=r.t;else runs.push({...r});});
+    return runs.map(r=>{let h=esc(r.t);if(!h)return "";if(r.c||r.h)h=`<span style="${r.c?`color:#${r.c};`:""}${r.h?`background-color:#${r.h}`:""}">${h}</span>`;if(r.s)h=`<s>${h}</s>`;if(r.u)h=`<u>${h}</u>`;if(r.i)h=`<i>${h}</i>`;if(r.b)h=`<b>${h}</b>`;return h;}).join("").replace(/\s+$/,"");};
+  const emit=(p,mode="")=>{
+    if(!ptext(p).trim()){if(!mode)blank();return;}
+    const runs=mode==="note"?[{t:"(",i:1},...p.runs.map(r=>({...r,i:1})),{t:")",i:1}]:p.kind==="h"?p.runs.map(r=>({...r,b:0})):p.runs;
+    const inner=runsHtml(runs);if(!inner)return;
+    if(p.kind==="h"&&!mode){closeList();out.push(`<h3>${inner}</h3>`);return;}
+    if(p.kind==="li"&&mode!=="note"){if(list!=="ul"){closeList();out.push("<ul>");list="ul";}out.push(`<li>${inner}</li>`);return;}
+    closeList();out.push(`<div${p.al&&!mode?` style="text-align: ${p.al};"`:""}>${inner}</div>`);};
+  const cellText=c=>c.map(ptext).join(" ").replace(/\s+/g," ").trim();
+  const headLike=s=>s.length>0&&s.length<=30&&(IMP_HEAD.test(s.replace(/[:.]$/,""))||(s===s.toUpperCase()&&/\p{L}/u.test(s)));
+  const emitTable=T=>{
+    const nonEmpty=r=>r.cells.filter(c=>cellText(c));
+    let rows=T.rows.map(r=>({head:r.head,cells:r.cells.map(c=>c||[])})).filter(r=>nonEmpty(r).length);
+    if(!rows.length)return;
+    rows=rows.filter((r,ri)=>!(r.head||(ri===0&&rows.length>1&&nonEmpty(r).length>=2&&nonEmpty(r).every(c=>headLike(cellText(c))))));   // hàng tiêu đề cột
+    if(rows.every(r=>nonEmpty(r).length===1)){blank();rows.forEach(r=>nonEmpty(r)[0].forEach(p=>emit(p)));blank();lastShort=false;return;}   // bảng 1 cột = khung trang trí
+    // cột lời dẫn = cột nhiều chữ nhất cả bảng → cột trước là tên mục / giờ, cột sau là ghi chú (giống nhau ở mọi hàng)
+    const tot=[];rows.forEach(r=>r.cells.forEach((c,k)=>{tot[k]=(tot[k]||0)+cellText(c).length;}));
+    let mainCol=0;tot.forEach((v,k)=>{if(v>(tot[mainCol]||0))mainCol=k;});
+    const long=rows.some(r=>r.cells.some(c=>cellText(c).length>70||c.filter(p=>ptext(p).trim()).length>2));
+    rows.forEach(r=>{
+      const ne=r.cells.map((c,k)=>({c,k,t:cellText(c)})).filter(x=>x.t);
+      if(ne.length===1){if(long||!lastShort)blank();ne[0].c.forEach(p=>emit(p));lastShort=!long;return;}
+      if(!long){if(!lastShort)blank();closeList();out.push(`<div>${ne.map((x,q)=>q===0&&ne.length>2?`<b>${esc(x.t)}</b>`:esc(x.t)).join(" — ")}</div>`);lastShort=true;return;}
+      blank();lastShort=false;
+      const main=ne.find(x=>x.k===mainCol)||ne.reduce((a,b)=>b.t.length>a.t.length?b:a);
+      const labels=ne.filter(x=>x.k<main.k),notes=ne.filter(x=>x.k>main.k);
+      if(labels.length){closeList();out.push(`<div><b>${labels.map(x=>esc(x.t)).join(" · ")}</b></div>`);}
+      main.c.forEach(p=>emit(p));
+      notes.forEach(x=>x.c.forEach(p=>{if(ptext(p).trim())emit(p,"note");}));
+      blank();});};
+  for(const b of blocks){if(b.type==="table"){emitTable(b);}else{emit(b.p);lastShort=false;}}
+  closeList();
+  while(out.length&&out[0]==="<div><br></div>")out.shift();while(out.length&&out[out.length-1]==="<div><br></div>")out.pop();
+  return sanitizeHtml(out.join("").replace(/(<div><br><\/div>){2,}/g,"<div><br></div>").normalize("NFC"));
+}
+
+// ---- Word .docx (cũng là định dạng Google Tài liệu tải về) ----
+function impXml(files,p){const b=files[p];if(!b)return null;const d=new DOMParser().parseFromString(new TextDecoder().decode(b),"application/xml");return d.getElementsByTagName("parsererror").length?null:d;}
+const kidsOf=(el,n)=>el?[...el.children].filter(c=>c.localName===n):[];
+const kidOf=(el,n)=>el?[...el.children].find(c=>c.localName===n)||null:null;
+const wval=el=>el?(el.getAttribute("w:val")??el.getAttribute("val")):null;
+const wOn=el=>!!el&&!/^(0|false|off|none)$/i.test(wval(el)||"");
+const HL={yellow:"fef08a",green:"bbf7d0",cyan:"a5f3fc",magenta:"f5d0fe",blue:"bfdbfe",red:"fecaca",darkBlue:"93c5fd",darkCyan:"67e8f9",darkGreen:"86efac",darkMagenta:"e9d5ff",darkRed:"fca5a5",darkYellow:"fde68a",lightGray:"e5e7eb",darkGray:"d1d5db"};
+function docxToBlocks(files){
+  const doc=impXml(files,"word/document.xml");if(!doc)throw new Error("File Word bị hỏng.");
+  const sty=impXml(files,"word/styles.xml"),numx=impXml(files,"word/numbering.xml");
+  // kiểu (style): đậm / nghiêng / tiêu đề / danh sách, kế thừa basedOn
+  const S={};if(sty)[...sty.getElementsByTagName("w:style")].forEach(s=>{const id=s.getAttribute("w:styleId"),rp=kidOf(s,"rPr"),pp=kidOf(s,"pPr");
+    S[id]={name:String(wval(kidOf(s,"name"))||""),based:wval(kidOf(s,"basedOn")),b:rp&&kidOf(rp,"b")?wOn(kidOf(rp,"b")):null,i:rp&&kidOf(rp,"i")?wOn(kidOf(rp,"i")):null,
+      ol:pp&&kidOf(pp,"outlineLvl")?+wval(kidOf(pp,"outlineLvl")):null,num:pp&&kidOf(pp,"numPr"),jc:pp&&wval(kidOf(pp,"jc"))};});
+  const sGet=(id,k,d=0)=>{let s=S[id];while(s&&d<12){if(s[k]!==null&&s[k]!==undefined&&s[k]!=="")return s[k];s=S[s.based];d++;}return null;};
+  // đánh số danh sách
+  const absOf={},lvls={},starts={};
+  if(numx){const abs={};[...numx.getElementsByTagName("w:abstractNum")].forEach(a=>{abs[a.getAttribute("w:abstractNumId")]=a;});
+    [...numx.getElementsByTagName("w:num")].forEach(n=>{const id=n.getAttribute("w:numId"),aid=wval(kidOf(n,"abstractNumId"));absOf[id]=aid;
+      kidsOf(n,"lvlOverride").forEach(o=>{const so=kidOf(o,"startOverride");if(so)starts[id+":"+o.getAttribute("w:ilvl")]=+wval(so);});
+      const a=abs[aid];if(a&&!lvls[aid]){lvls[aid]={};kidsOf(a,"lvl").forEach(l=>{lvls[aid][l.getAttribute("w:ilvl")]={fmt:wval(kidOf(l,"numFmt"))||"decimal",txt:wval(kidOf(l,"lvlText"))??"%1.",start:+(wval(kidOf(l,"start"))||1)};});}});}
+  const counters={};
+  const roman=n=>{let s="";[[1000,"M"],[900,"CM"],[500,"D"],[400,"CD"],[100,"C"],[90,"XC"],[50,"L"],[40,"XL"],[10,"X"],[9,"IX"],[5,"V"],[4,"IV"],[1,"I"]].forEach(([v,r])=>{while(n>=v){s+=r;n-=v;}});return s;};
+  const fmtN=(n,f)=>f==="upperRoman"?roman(n):f==="lowerRoman"?roman(n).toLowerCase():f==="upperLetter"?String.fromCharCode(64+((n-1)%26+1)):f==="lowerLetter"?String.fromCharCode(96+((n-1)%26+1)):f==="decimalZero"?String(n).padStart(2,"0"):String(n);
+  const listLabel=(numId,ilvl)=>{const aid=absOf[numId];const L=aid&&lvls[aid];if(!L||!L[ilvl]||numId==="0")return null;const lv=L[ilvl];
+    if(lv.fmt==="bullet")return {bullet:true};if(lv.fmt==="none")return {text:""};
+    const c=counters[aid]=counters[aid]||{};const st=k=>starts[numId+":"+k]??(L[k]?L[k].start:1);
+    c[ilvl]=(c[ilvl]===undefined?st(ilvl):c[ilvl]+1);Object.keys(c).forEach(k=>{if(+k>+ilvl)delete c[k];});
+    const text=String(lv.txt).replace(/%(\d)/g,(_,d)=>{const k=String(+d-1);return fmtN(c[k]===undefined?st(k):c[k],(L[k]||lv).fmt);});return {text};};
+  // một đoạn <w:p> → các dòng (w:br tách dòng)
+  const para=p=>{const pp=kidOf(p,"pPr"),ps=pp&&wval(kidOf(pp,"pStyle"));
+    const sb=ps?sGet(ps,"b"):null,si=ps?sGet(ps,"i"):null,name=ps?String(sGet(ps,"name")||ps):"";
+    const ol=pp&&kidOf(pp,"outlineLvl")?+wval(kidOf(pp,"outlineLvl")):ps?sGet(ps,"ol"):null;
+    let jc=(pp&&wval(kidOf(pp,"jc")))||(ps&&sGet(ps,"jc"))||"";const al=jc==="center"?"center":(jc==="right"||jc==="end")?"right":"";
+    const np=(pp&&kidOf(pp,"numPr"))||(ps&&sGet(ps,"num"));
+    const lines=[[]];
+    const addRun=(r)=>{const rp=kidOf(r,"rPr"),rs=rp&&wval(kidOf(rp,"rStyle"));
+      const on=(tag,inh)=>rp&&kidOf(rp,tag)?wOn(kidOf(rp,tag)):!!inh;
+      const st={b:on("b",(rs&&sGet(rs,"b"))??sb),i:on("i",(rs&&sGet(rs,"i"))??si),u:!!(rp&&kidOf(rp,"u")&&wval(kidOf(rp,"u"))!=="none"),s:on("strike")||on("dstrike")};
+      const col=rp&&wval(kidOf(rp,"color"));if(col&&/^[0-9a-f]{6}$/i.test(col)&&!/^(000000|auto)$/i.test(col))st.c=col.toLowerCase();
+      const hl=rp&&wval(kidOf(rp,"highlight")),shd=rp&&kidOf(rp,"shd");const fill=shd&&shd.getAttribute("w:fill");
+      if(hl&&HL[hl])st.h=HL[hl];else if(fill&&/^[0-9a-f]{6}$/i.test(fill)&&!/^(ffffff|auto)$/i.test(fill))st.h=fill.toLowerCase();
+      const caps=rp&&kidOf(rp,"caps")&&wOn(kidOf(rp,"caps"));
+      for(const c of r.children){const n=c.localName;let t=null;
+        if(n==="t")t=c.textContent;else if(n==="tab"||n==="ptab")t="\t";else if(n==="noBreakHyphen")t="-";else if(n==="softHyphen")t="";
+        else if(n==="br"||n==="cr"){if(c.getAttribute("w:type")!=="page")lines.push([]);continue;}
+        if(t){if(caps)t=t.toUpperCase();lines[lines.length-1].push({...st,t});}}};
+    const walk=el=>{for(const c of el.children){const n=c.localName;
+      if(n==="r")addRun(c);else if(["hyperlink","ins","smartTag","fldSimple","customXml","bdo","dir"].includes(n))walk(c);
+      else if(n==="sdt"){const sc=kidOf(c,"sdtContent");if(sc)walk(sc);}}};
+    walk(p);
+    let label=null;if(np){const id=wval(kidOf(np,"numId")),lv=wval(kidOf(np,"ilvl"))||"0";if(id)label=listLabel(id,lv);}
+    const isH=(ol!==null&&ol<=2)||/^(heading [1-3]|title|tiêu đề [1-3]?|subtitle)$/i.test(name.trim());
+    return lines.map((runs,k)=>{const P={kind:"p",runs,al};
+      if(k===0&&label){if(label.bullet)P.kind="li";else if(label.text)runs.unshift({t:label.text+" ",b:runs[0]&&runs[0].b});}
+      if(isH&&runs.map(r=>r.t).join("").trim().length<=120)P.kind="h";
+      return P;});};
+  const blocks=[];
+  const cellParas=tc=>{const ps=[];for(const c of tc.children){if(c.localName==="p")ps.push(...para(c));else if(c.localName==="tbl")kidsOf(c,"tr").forEach(tr=>kidsOf(tr,"tc").forEach(t2=>ps.push(...cellParas(t2))));else if(c.localName==="sdt"){const sc=kidOf(c,"sdtContent");if(sc)ps.push(...cellParas(sc));}}return ps;};
+  const table=tbl=>{const rows=kidsOf(tbl,"tr").map(tr=>{const trp=kidOf(tr,"trPr");const cells=[];
+      [...tr.children].forEach(c=>{const tcs=c.localName==="tc"?[c]:c.localName==="sdt"?kidsOf(kidOf(c,"sdtContent"),"tc"):[];
+        tcs.forEach(tc=>{const tp=kidOf(tc,"tcPr"),vm=tp&&kidOf(tp,"vMerge"),span=Math.min(20,+(wval(tp&&kidOf(tp,"gridSpan"))||1));
+          cells.push(vm&&wval(vm)!=="restart"?[]:cellParas(tc));for(let q=1;q<span;q++)cells.push([]);});});
+      return {head:!!(trp&&kidOf(trp,"tblHeader")&&wOn(kidOf(trp,"tblHeader"))),cells};});
+    blocks.push({type:"table",rows});};
+  const body=kidOf(doc.documentElement,"body");
+  const walkBody=el=>{for(const c of el.children){const n=c.localName;
+    if(n==="p")para(c).forEach(p=>blocks.push({type:"p",p}));else if(n==="tbl")table(c);
+    else if(n==="sdt"){const sc=kidOf(c,"sdtContent");if(sc)walkBody(sc);}else if(n==="customXml")walkBody(c);}};
+  if(body)walkBody(body);
+  return {blocks,via:"Word"};
+}
+
+// ---- Excel .xlsx (cũng là định dạng Google Trang tính tải về) ----
+function xlsxToBlocks(files){
+  const wb=impXml(files,"xl/workbook.xml"),rels=impXml(files,"xl/_rels/workbook.xml.rels"),ss=impXml(files,"xl/sharedStrings.xml"),st=impXml(files,"xl/styles.xml");
+  const shared=ss?[...ss.getElementsByTagName("si")].map(si=>{const rs=kidsOf(si,"r");
+    if(!rs.length)return [{t:[...si.getElementsByTagName("t")].map(t=>t.textContent).join("")}];
+    return rs.map(r=>{const rp=kidOf(r,"rPr");return {t:[...r.getElementsByTagName("t")].map(t=>t.textContent).join(""),b:!!(rp&&kidOf(rp,"b")&&wOn(kidOf(rp,"b"))),i:!!(rp&&kidOf(rp,"i")&&wOn(kidOf(rp,"i")))};});}):[];
+  // định dạng số → nhận ra giờ / ngày
+  const fmts={};if(st)[...st.getElementsByTagName("numFmt")].forEach(f=>{fmts[f.getAttribute("numFmtId")]=f.getAttribute("formatCode")||"";});
+  const xf=st?kidsOf(kidOf(st.documentElement,"cellXfs"),"xf"):[];
+  const fonts=st?kidsOf(kidOf(st.documentElement,"fonts"),"font"):[];
+  const xfInfo=xf.map(x=>{const id=x.getAttribute("numFmtId")||"0",code=(fmts[id]||"").replace(/"[^"]*"|\\.|\[[^\]]*\]/g,"").toLowerCase();
+    const isT=/^(18|19|20|21|45|46|47)$/.test(id)||(/[hs]/.test(code)&&!/[dy]/.test(code))||(/m/.test(code)&&/[hs]/.test(code)&&!/[dy]/.test(code));
+    const isD=/^(14|15|16|17|22)$/.test(id)||/[dy]/.test(code);const f=fonts[+(x.getAttribute("fontId")||0)];
+    return {t:isT,d:isD,dt:id==="22"||(/[dy]/.test(code)&&/h/.test(code)),b:!!(f&&kidOf(f,"b")&&wOn(kidOf(f,"b"))),i:!!(f&&kidOf(f,"i")&&wOn(kidOf(f,"i")))};});
+  const hm=v=>{let m=Math.round((v%1)*1440);if(m>=1440)m=0;return String(Math.floor(m/60)).padStart(2,"0")+":"+String(m%60).padStart(2,"0");};
+  const ymd=v=>{const d=new Date(Date.UTC(1899,11,30)+Math.floor(v)*864e5);return String(d.getUTCDate()).padStart(2,"0")+"/"+String(d.getUTCMonth()+1).padStart(2,"0")+"/"+d.getUTCFullYear();};
+  const colIdx=ref=>{const m=/^([A-Z]+)/.exec(ref||"");if(!m)return -1;let n=0;for(const ch of m[1])n=n*26+ch.charCodeAt(0)-64;return n-1;};
+  const relMap={};if(rels)[...rels.getElementsByTagName("Relationship")].forEach(r=>{relMap[r.getAttribute("Id")]=r.getAttribute("Target");});
+  const sheets=[...wb.getElementsByTagName("sheet")].filter(s=>!/hidden/i.test(s.getAttribute("state")||"")).map(s=>{
+    let tg=relMap[s.getAttribute("r:id")]||"";tg=tg.replace(/^\/?xl\//,"").replace(/^\//,"");return {name:s.getAttribute("name")||"",path:"xl/"+tg};});
+  const blocks=[];const used=sheets.map(sh=>({sh,doc:impXml(files,sh.path)})).filter(x=>x.doc);
+  used.forEach(({sh,doc},k)=>{
+    const rows=[];[...doc.getElementsByTagName("row")].forEach(row=>{const cells=[];
+      kidsOf(row,"c").forEach(c=>{const ci=colIdx(c.getAttribute("r"));if(ci<0||ci>60)return;const t=c.getAttribute("t"),v=kidOf(c,"v"),inf=xfInfo[+(c.getAttribute("s")||0)]||{};let runs=null;
+        if(t==="s"&&v)runs=(shared[+v.textContent]||[]).map(r=>({...r}));
+        else if(t==="inlineStr"){const is=kidOf(c,"is");runs=[{t:is?[...is.getElementsByTagName("t")].map(x=>x.textContent).join(""):""}];}
+        else if(v){let s=v.textContent;if(t==="b")s=s==="1"?"TRUE":"FALSE";else if(!t||t==="n"){const n=parseFloat(s);if(!isNaN(n)){if(inf.dt)s=ymd(n)+" "+hm(n);else if(inf.t)s=hm(n);else if(inf.d)s=ymd(n);else s=String(+n.toFixed(6));}}runs=[{t:s}];}
+        if(!runs)return;runs.forEach(r=>{if(inf.b&&r.b===undefined)r.b=true;if(inf.i&&r.i===undefined)r.i=true;});
+        while(cells.length<ci)cells.push([]);
+        // xuống dòng trong ô → nhiều đoạn
+        const ps=[[]];runs.forEach(r=>{String(r.t).replace(/\r/g,"").split("\n").forEach((piece,q)=>{if(q)ps.push([]);if(piece)ps[ps.length-1].push({...r,t:piece});});});
+        cells[ci]=ps.map(rs=>({kind:"p",runs:rs}));});
+      rows.push({cells});});
+    if(!rows.some(r=>r.cells.some(c=>c.length)))return;
+    if(used.length>1)blocks.push({type:"p",p:{kind:"h",runs:[{t:sh.name}]}});
+    // tách bảng ở các hàng trống liên tiếp
+    let cur=[];const flush=()=>{if(cur.length)blocks.push({type:"table",rows:cur});cur=[];};
+    rows.forEach(r=>{if(r.cells.some(c=>c.some(p=>p.runs.some(x=>String(x.t).trim()))))cur.push(r);else flush();});flush();
+    if(k<used.length-1)blocks.push({type:"p",p:{kind:"p",runs:[]}});});
+  return {blocks,via:"Excel"};
+}
+
+// ---- Word 97–2003 (.doc): đọc chữ & bảng (không giữ đậm / nghiêng) ----
+function cfbOpen(u8){const dv=new DataView(u8.buffer,u8.byteOffset,u8.byteLength);
+  if(dv.getUint32(0,true)!==0xE011CFD0)throw new Error("File không đúng định dạng Word.");
+  const ss=1<<dv.getUint16(30,true),mss=1<<dv.getUint16(32,true),nFat=dv.getUint32(44,true),dirStart=dv.getUint32(48,true),cutoff=dv.getUint32(56,true),mfStart=dv.getUint32(60,true),nMf=dv.getUint32(64,true),difStart=dv.getUint32(68,true),nDif=dv.getUint32(72,true);
+  const off=s=>(s+1)*ss,END=0xFFFFFFFA,u32=o=>o+4<=u8.length?dv.getUint32(o,true):END;
+  const difat=[];for(let i=0;i<109;i++){const v=u32(76+i*4);if(v<END)difat.push(v);}
+  let d=difStart;for(let k=0;k<nDif&&d<END;k++){for(let i=0;i<ss/4-1;i++){const v=u32(off(d)+i*4);if(v<END)difat.push(v);}d=u32(off(d)+ss-4);}
+  const fat=[];difat.slice(0,nFat).forEach(s=>{for(let i=0;i<ss/4;i++)fat.push(u32(off(s)+i*4));});
+  const chain=(s,t)=>{const r=[];const seen=new Set();while(s<END&&!seen.has(s)&&r.length<1e6){seen.add(s);r.push(s);s=t[s];}return r;};
+  const readChain=s=>{const cs=chain(s,fat);const o=new Uint8Array(cs.length*ss);cs.forEach((c,i)=>o.set(u8.subarray(off(c),off(c)+ss),i*ss));return o;};
+  const dir=readChain(dirStart),ents=[];
+  for(let i=0;i+128<=dir.length;i+=128){const dd=new DataView(dir.buffer,dir.byteOffset+i,128),nl=dd.getUint16(64,true);let name="";for(let k=0;k<Math.min(31,nl/2-1);k++)name+=String.fromCharCode(dd.getUint16(k*2,true));ents.push({name,type:dd.getUint8(66),start:dd.getUint32(116,true),size:dd.getUint32(120,true)});}
+  const mfat=[];if(nMf){const m=readChain(mfStart),mv=new DataView(m.buffer,m.byteOffset,m.byteLength);for(let i=0;i<m.length/4;i++)mfat.push(mv.getUint32(i*4,true));}
+  let mini=null;
+  const get=name=>{const e=ents.find(x=>x.name===name&&x.type===2);if(!e)return null;
+    if(e.size<cutoff){if(!mini)mini=readChain(ents[0].start);const cs=chain(e.start,mfat),o=new Uint8Array(cs.length*mss);cs.forEach((c,i)=>o.set(mini.subarray(c*mss,c*mss+mss),i*mss));return o.subarray(0,e.size);}
+    return readChain(e.start).subarray(0,e.size);};
+  return {get,names:ents.map(e=>e.name)};
+}
+function docToBlocks(u8){
+  const cf=cfbOpen(u8);const wd=cf.get("WordDocument");
+  if(!wd){if(cf.names.includes("Workbook")||cf.names.includes("Book"))throw new Error("File Excel cũ (.xls) chưa đọc được — mở bằng Excel / Numbers rồi lưu thành .xlsx.");throw new Error("Không phải file Word.");}
+  const dv=new DataView(wd.buffer,wd.byteOffset,wd.byteLength);
+  if(dv.getUint16(0,true)!==0xA5EC)throw new Error("File Word quá cũ (trước Word 97) — mở bằng Word rồi lưu thành .docx.");
+  const flags=dv.getUint16(0x0A,true);if(flags&0x0100)throw new Error("File Word có mật khẩu — nhờ khách gửi bản không khoá.");
+  const tbl=cf.get(flags&0x0200?"1Table":"0Table");if(!tbl)throw new Error("File Word bị hỏng.");
+  const tv=new DataView(tbl.buffer,tbl.byteOffset,tbl.byteLength);
+  const ccpText=dv.getInt32(0x4C,true),fcClx=dv.getUint32(0x1A2,true),lcbClx=dv.getUint32(0x1A6,true),fcPap=dv.getUint32(0x102,true),lcbPap=dv.getUint32(0x106,true);
+  // bảng mảnh văn bản (piece table)
+  let i=fcClx,pcd=null;while(i<fcClx+lcbClx&&i<tbl.length){const t=tbl[i];if(t===1){i+=3+tv.getUint16(i+1,true);}else if(t===2){pcd=i+5;break;}else break;}
+  if(pcd===null)throw new Error("Không đọc được nội dung file Word.");
+  const lcb=tv.getUint32(pcd-4,true),n=(lcb-4)/12,cps=[],pcs=[];for(let k=0;k<=n;k++)cps.push(tv.getUint32(pcd+k*4,true));
+  for(let k=0;k<n;k++){const fc=tv.getUint32(pcd+(n+1)*4+k*8+2,true);pcs.push({comp:!!(fc&0x40000000),fc:fc&0x3FFFFFFF});}
+  // thuộc tính đoạn: trong bảng / cuối hàng (TTP)
+  const pap=[];if(lcbPap){const m=(lcbPap-4)/8;for(let k=0;k<m;k++){const pn=tv.getUint32(fcPap+(m+1)*4+k*4,true)&0x3FFFFF,base=pn*512;if(base+512>wd.length)continue;
+    const crun=wd[base+511];for(let j=0;j<crun;j++){const s=dv.getUint32(base+j*4,true),e=dv.getUint32(base+(j+1)*4,true),bo=wd[base+4*(crun+1)+13*j];let inT=false,ttp=false;
+      if(bo){let p=base+bo*2,cb=wd[p],len,st;if(cb===0){len=2*wd[p+1];st=p+2;}else{len=2*cb-1;st=p+1;}let q=st+2;const end=st+len;
+        while(q+2<=end){const sp=dv.getUint16(q,true),spra=sp>>13;q+=2;let sz=[1,1,2,4,2,2,0,3][spra];
+          if(sp===0x2416)inT=inT||wd[q]===1;else if(sp===0x2417||sp===0x244C)ttp=ttp||wd[q]===1;else if(sp===0x6649)inT=inT||dv.getInt32(q,true)>0;
+          if(spra===6){if(sp===0xD608||sp===0xD606){sz=dv.getUint16(q,true)+1;}else sz=wd[q]+1;}q+=sz;}}
+      pap.push({s,e,inT,ttp});}}}
+  pap.sort((a,b)=>a.s-b.s);
+  const papAt=fc=>{let lo=0,hi=pap.length-1;while(lo<=hi){const mid=(lo+hi)>>1,p=pap[mid];if(fc<p.s)hi=mid-1;else if(fc>=p.e)lo=mid+1;else return p;}return null;};
+  const W1252={128:8364,130:8218,131:402,132:8222,133:8230,134:8224,135:8225,136:710,137:8240,138:352,139:8249,140:338,142:381,145:8216,146:8217,147:8220,148:8221,149:8226,150:8211,151:8212,152:732,153:8482,154:353,155:8250,156:339,158:382,159:376};
+  const blocks=[];let text="",cell=[],row=[],rows=[],fld=[];
+  const pushPara=()=>{const t=text.replace(/\s+$/,"");text="";return {kind:"p",runs:t?[{t}]:[]};};
+  const flushTable=()=>{if(row.length||cell.length){if(cell.length)row.push(cell);rows.push({cells:row});row=[];cell=[];}if(rows.length)blocks.push({type:"table",rows});rows=[];};
+  const show=()=>fld.every(f=>f);
+  for(let k=0;k<n;k++){const a=Math.max(0,cps[k]),b=Math.min(cps[k+1],ccpText);const P=pcs[k];
+    for(let cp=a;cp<b;cp++){const pos=P.comp?P.fc/2+(cp-cps[k]):P.fc+2*(cp-cps[k]);if(pos+(P.comp?1:2)>wd.length)break;
+      let c=P.comp?wd[pos]:dv.getUint16(pos,true);if(P.comp&&W1252[c])c=W1252[c];
+      if(c===0x13){fld.push(false);continue;}if(c===0x14){if(fld.length)fld[fld.length-1]=true;continue;}if(c===0x15){fld.pop();continue;}
+      if(c===13||c===7||c===12){const pa=papAt(pos);
+        if(c===7){if(pa&&pa.ttp){if(text.trim())cell.push(pushPara());else text="";if(cell.length)row.push(cell);cell=[];rows.push({cells:row});row=[];}
+          else{cell.push(pushPara());row.push(cell);cell=[];}continue;}
+        if(pa&&pa.inT){cell.push(pushPara());continue;}
+        flushTable();blocks.push({type:"p",p:pushPara()});continue;}
+      if(!show())continue;
+      if(c===11){const pa=papAt(pos);if(pa&&pa.inT)cell.push(pushPara());else{flushTable();blocks.push({type:"p",p:pushPara()});}continue;}
+      if(c===9){text+="\t";continue;}if(c===30){text+="-";continue;}if(c===160){text+=" ";continue;}
+      if(c<32||c===31)continue;
+      text+=String.fromCharCode(c);}}
+  if(text.trim()){if(rows.length||row.length||cell.length)cell.push(pushPara());else blocks.push({type:"p",p:pushPara()});}
+  flushTable();
+  return {blocks,via:"Word"};
 }
 // Gemini đôi khi chèn thẻ HTML (<br>, <b>…) vào Markdown → đổi về dạng chuẩn
 function pdfMdClean(md){return String(md||"").replace(/\r/g,"").replace(/<br\s*\/?>/gi,"\n").replace(/<\/?(b|strong)>/gi,"**").replace(/<\/?(i|em)>/gi,"*").replace(/<\/?(p|div)[^>]*>/gi,"\n").replace(/<[^>\n]{1,40}>/g,"").replace(/&nbsp;/g," ").replace(/&amp;/g,"&").replace(/\n{3,}/g,"\n\n");}

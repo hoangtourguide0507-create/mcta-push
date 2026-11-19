@@ -1086,3 +1086,15 @@ button{color:inherit}
 .pdf-share-bar{position:fixed;left:12px;right:12px;bottom:calc(16px + env(safe-area-inset-bottom));z-index:9999;display:flex;align-items:center;gap:10px;padding:10px 10px 10px 16px;border-radius:18px;background:var(--paper);color:var(--ink);box-shadow:0 12px 40px rgba(0,0,0,.25);border:1px solid var(--line)}
 .pdf-share-bar span{flex:1;font-weight:800}
 .pdf-share-x{border:0;background:none;font-size:22px;color:var(--muted);padding:0 6px;cursor:pointer}
+/* V28.17: Nhập kịch bản (link Google / Word / Excel / PDF) */
+.imp-job{margin:-4px 0 10px}
+.imp-lbl{display:block;font-weight:800;font-size:14px;margin:6px 2px 8px}
+.imp-link{display:flex;gap:8px}
+.imp-link input{flex:1;min-width:0;font:inherit;font-size:16px;padding:12px 14px;border:1.5px solid var(--line);border-radius:14px;background:var(--paper);color:var(--ink)}
+.imp-link input:focus{outline:none;border-color:var(--purple)}
+.imp-link .black-btn{flex:none;padding:0 18px}
+.imp-or{display:flex;align-items:center;gap:10px;margin:14px 0;color:var(--muted);font-size:13px}
+.imp-or:before,.imp-or:after{content:"";flex:1;height:1px;background:var(--line)}
+.section-head:has(.notes-head-btns){flex-wrap:wrap;row-gap:10px}
+.section-head .notes-head-btns{flex:1 1 100%}
+.notes-head-btns>button{flex:1;white-space:nowrap;justify-content:center}

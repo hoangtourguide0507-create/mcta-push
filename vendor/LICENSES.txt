@@ -1,5 +1,6 @@
-Thư viện mã nguồn mở dùng cho Nhập / Xuất PDF (tải khi cần, chạy trên máy):
+Thư viện mã nguồn mở dùng cho Nhập kịch bản / Xuất PDF (tải khi cần, chạy trên máy):
 - pdf.js 3.11.174 (Mozilla) — Apache License 2.0 — https://github.com/mozilla/pdf.js
 - pdf-lib 1.17.1 — MIT License — https://github.com/Hopding/pdf-lib
 - @pdf-lib/fontkit 1.1.1 — MIT License — https://github.com/Hopding/fontkit
 - Be Vietnam Pro (fonts/) — SIL Open Font License 1.1 — https://fonts.google.com/specimen/Be+Vietnam+Pro
+- fflate 0.8.2 (vendor/fflate.min.js) — MIT License — https://github.com/101arrowz/fflate

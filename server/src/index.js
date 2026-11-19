@@ -22,6 +22,7 @@
  *   POST /translate {text, style, glossary, before, after}  (x-app-key)  dịch Anh ↔ Việt: Gemini (khoá miễn phí) → dự phòng Workers AI
  *   POST /aikey {key} · POST /aistatus  (x-app-key)  lưu / kiểm tra khoá Gemini
  *   POST /pdf2text  (x-app-key, body = file PDF)  Gemini đọc PDF (cả bản scan) → Markdown để nhập kịch bản
+ *   POST /fetchdoc {url}  (x-app-key)  tải hộ Google Tài liệu (.docx) / Trang tính (.xlsx) / Drive để nhập kịch bản
  *   GET  /status                                  → { setup, hasState }
  *   POST /setup   { key, from }                     đặt mã truy cập lần đầu (hoặc kiểm tra mã);
  *                                                   from = địa chỉ app Netlify cũ để chép dữ liệu sang
@@ -30,6 +31,28 @@
  */
 
 const PDF_MAX = 14.5 * 1048576;
+const DOC_MAX = 15 * 1048576;
+// link chia sẻ Google → link tải file: Tài liệu → .docx, Trang tính → .xlsx, Trình bày → .pdf, Drive → file gốc.
+// '' = không phải link Google hợp lệ; null = link "Xuất bản lên web" (/d/e/…) chưa hỗ trợ
+function docExportUrl(raw) {
+  let u; try { u = new URL(raw); } catch { return ''; }
+  if (u.protocol !== 'https:') return '';
+  const h = u.hostname.toLowerCase(), id = s => /^[\w-]{20,}$/.test(s || '') ? s : '';
+  if (h === 'docs.google.com') {
+    const m = u.pathname.match(/\/(document|spreadsheets|presentation)\/d\/([^/]+)/);
+    if (!m) return '';
+    if (m[2] === 'e') return null;
+    const d = id(m[2]); if (!d) return '';
+    if (m[1] === 'document') return `https://docs.google.com/document/d/${d}/export?format=docx`;
+    if (m[1] === 'spreadsheets') return `https://docs.google.com/spreadsheets/d/${d}/export?format=xlsx`;
+    return `https://docs.google.com/presentation/d/${d}/export/pdf`;
+  }
+  if (h === 'drive.google.com' || h === 'drive.usercontent.google.com') {
+    const m = u.pathname.match(/\/file\/d\/([^/]+)/); const d = id(m ? m[1] : u.searchParams.get('id'));
+    return d ? `https://drive.usercontent.google.com/download?id=${d}&export=download&confirm=t` : '';
+  }
+  return '';
+}
 const CORS = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,POST,PUT,OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type, x-app-key', 'Access-Control-Max-Age': '86400' };
 const json = (o, s = 200) => new Response(JSON.stringify(o), { status: s, headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', ...CORS } });
 const MAX_SUBS = 200, MAX_ITEMS = 500, AHEAD = 75 * 864e5, LATE = 30 * 60000;
@@ -317,6 +340,28 @@ ${before || after ? `\nSurrounding script for context only (do NOT translate or 
     return json({ ok: false, loi: quota ? 'Hết lượt dịch miễn phí lúc này — thử lại sau ít phút (hoặc sáng mai)' : (key || (this.env && this.env.AI) ? 'Dịch lỗi: ' + errs.join(' · ').slice(0, 200) : 'Chưa có khoá Gemini — vào Khác → Dịch kịch bản để dán khoá'), detail: errs }, 502);
   }
 
+  // ---- Nhập kịch bản từ link Google: trình duyệt không tải thẳng được (CORS) nên máy chủ tải hộ ----
+  // Chỉ nhận link Google (không phải proxy mở), cần mã truy cập; file phải mở chia sẻ "Bất kỳ ai có đường liên kết".
+  async fetchDoc(req) {
+    if (req.method !== 'POST') return json({ ok: false }, 405);
+    const bad = await this.aiAuth(req); if (bad) return bad;
+    let url = ''; try { url = String((await req.json()).url || '').trim(); } catch { }
+    const target = docExportUrl(url);
+    if (!target) return json({ ok: false, loi: target === null ? 'Link “Xuất bản lên web” chưa dùng được — hãy dùng link Chia sẻ của tài liệu' : 'Chỉ nhận link Google Tài liệu, Trang tính hoặc Google Drive' }, 400);
+    let r;
+    try { r = await fetch(target, { redirect: 'follow', headers: { 'User-Agent': 'Mozilla/5.0 (compatible; MCTA-Planner)' } }); }
+    catch { return json({ ok: false, loi: 'Không kết nối được Google — thử lại sau ít phút' }, 502); }
+    const ct = r.headers.get('content-type') || '';
+    if (r.status === 404) return json({ ok: false, loi: 'Không tìm thấy tài liệu — kiểm tra lại link' }, 404);
+    if (!r.ok || /text\/html/i.test(ct)) return json({ ok: false, loi: 'Tài liệu chưa mở chia sẻ. Trong Google: Chia sẻ → Quyền truy cập chung → “Bất kỳ ai có đường liên kết” rồi thử lại.' }, 403);
+    const len = +(r.headers.get('content-length') || 0);
+    if (len > DOC_MAX) return json({ ok: false, loi: 'Tài liệu lớn quá (tối đa 15 MB)' }, 413);
+    const cd = r.headers.get('content-disposition') || '';
+    let name = ''; const m1 = /filename\*=UTF-8''([^;]+)/i.exec(cd), m2 = /filename="?([^";]+)"?/i.exec(cd);
+    try { name = m1 ? decodeURIComponent(m1[1]) : m2 ? m2[1] : ''; } catch { name = m2 ? m2[1] : ''; }
+    return new Response(r.body, { status: 200, headers: { 'Content-Type': ct || 'application/octet-stream', 'x-filename': encodeURIComponent(name), 'Access-Control-Expose-Headers': 'x-filename', 'Cache-Control': 'no-store', ...CORS } });
+  }
+
   // ---- Nhập PDF: Gemini đọc file PDF (kể cả bản scan / ảnh chụp) → Markdown ----
   pdfPrompt() {
     return `You convert an MC's event script (wedding, gala, corporate event, conference…) from a PDF into clean Markdown for a script editor.
@@ -425,6 +470,7 @@ Rules:
       if (p === '/aikey') return await this.aiKey(req);
       if (p === '/aistatus') return await this.aiStatus(req);
       if (p === '/pdf2text') return await this.pdf2text(req);
+      if (p === '/fetchdoc') return await this.fetchDoc(req);
       if (!['/plan', '/devices', '/sub', '/unsub', '/test'].includes(p)) return json({ ok: false, loi: 'Không có đường dẫn này' }, 404);
       if (req.method !== 'POST') return json({ ok: false, loi: 'Sai phương thức' }, 405);
       const q = await req.json().catch(() => ({}));
