@@ -1103,3 +1103,5 @@ button{color:inherit}
 .ne-pen>b{font-size:14px}
 .ne-pen span{flex:1 1 100%}
 .ne-pen-ok{margin-left:auto;border:0;border-radius:10px;padding:7px 14px;font:inherit;font-weight:800;background:var(--purple);color:#fff;cursor:pointer}
+.tb-kb{font-size:19px;line-height:1}
+.app-ver{margin-top:8px;opacity:.8}

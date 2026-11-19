@@ -1,5 +1,5 @@
 
-const APP_VERSION="V28.19";
+const APP_VERSION="V28.20";
 // V28.0: app chạy trên GitHub Pages; dữ liệu + thông báo nằm trên máy chủ Cloudflare riêng (mcta-push).
 const CLOUD_DEFAULT="https://mcta-push.hoangtourguide0507.workers.dev";
 const KEY="freelance_planner_v12";
@@ -871,7 +871,7 @@ more(){
  </div>
  <section class="section"><div class="section-head"><h2>Loại show</h2><button class="black-btn" onclick="addJobType()">${icon("plus",14)} Thêm loại</button></div><div class="type-settings-list">${state.settings.jobTypes.map((t,i)=>{const c=typeMeta(t.name);return `<div class="type-setting-row"><span class="tag type-tag" style="--type-bg:${c.bg};--type-color:${c.color};--type-border:${c.border}">${esc(t.name)}</span><div class="type-setting-actions"><button class="mini-btn" onclick="renameJobType('${t.id}')">Sửa</button><button class="mini-btn danger-mini" onclick="deleteJobType('${t.id}')">Xóa</button></div></div>`}).join("")}</div></section>
  <section class="section"><div class="section-head"><h2>Giao diện</h2><span class="small">2 phong cách · mỗi máy chọn riêng</span></div><div class="theme-grid two-themes">${themeCard("pop","Super App ✦","Sáng · cam rực · icon nhiều màu · hiệu ứng vui, nảy, pháo giấy",state.settings.theme)}${themeCard("stage","Sân khấu ✧","Tối · vàng gold · icon nét mảnh phát sáng · ánh đèn, kim tuyến",state.settings.theme)}</div><div class="small pay-note">Đổi giao diện xong, biểu tượng ngoài Màn hình chính chỉ đổi khi bạn xoá và thêm lại app.</div></section>
- <section class="section"><div class="card subtle-box"><div class="eyebrow">ĐỒNG BỘ</div><h3>${localMode?"LOCAL TEST MODE":backendReady?"Cloud sync đã sẵn sàng":"Chưa kết nối cloud"}</h3><p>${localMode?"Dữ liệu chỉ nằm trên MacBook này; không ghi lên cloud.":"Dữ liệu được lưu trên máy chủ Cloudflare riêng của bạn để mọi máy dùng chung một bộ dữ liệu."}</p></div></section>`;
+ <section class="section"><div class="card subtle-box"><div class="eyebrow">ĐỒNG BỘ</div><h3>${localMode?"LOCAL TEST MODE":backendReady?"Cloud sync đã sẵn sàng":"Chưa kết nối cloud"}</h3><p>${localMode?"Dữ liệu chỉ nằm trên MacBook này; không ghi lên cloud.":"Dữ liệu được lưu trên máy chủ Cloudflare riêng của bạn để mọi máy dùng chung một bộ dữ liệu."}</p><p class="small app-ver">Phiên bản ứng dụng: <b>${APP_VERSION}</b></p></div></section>`;
 }}
 function setAppName(){
   const value=prompt("Tên hiển thị của ứng dụng:",state.settings.appName||"MC Thiên Ân");
@@ -1241,7 +1241,7 @@ function openNote(existing=null,opts={}){
     <div class="ne-palette" id="nePalette" hidden></div>
     <div class="ne-trans" id="neTrans" hidden></div>
     <div class="ne-toolbar" id="neToolbar">
-     ${tb("rteCmd('bold')","<b>B</b>","In đậm")}${tb("rteCmd('italic')","<i>I</i>","In nghiêng")}${tb("rteCmd('underline')","<u>U</u>","Gạch chân")}${tb("rteCmd('strikeThrough')","<s>S</s>","Gạch ngang")}<i class="tb-sep"></i>
+     ${tb("kbForce()",'<span class="tb-kb">⌨︎</span>',"Mở bàn phím","tb-kbd")}${tb("rteCmd('bold')","<b>B</b>","In đậm")}${tb("rteCmd('italic')","<i>I</i>","In nghiêng")}${tb("rteCmd('underline')","<u>U</u>","Gạch chân")}${tb("rteCmd('strikeThrough')","<s>S</s>","Gạch ngang")}<i class="tb-sep"></i>
      ${tb("rtePalette('fore')",'<span class="tb-color">A</span>',"Màu chữ")}${tb("rtePalette('hili')",'<span class="tb-hl">A</span>',"Tô nền")}${tb("rteTranslate()",'<span class="tb-tr">🌐 Dịch</span>',"Dịch Anh ↔ Việt (đoạn đang chọn)","tb-wide")}${tb("rteEN()",'<span class="tb-en">EN</span>',"Dòng tiếng Anh (nghiêng, xanh)")}${tb("rteTab()","⇥ Tab","Tab — thụt đầu dòng như Word (trong danh sách: lùi mục vào trong)","tb-wide")}${tb("rteTab(true)","⇤","Bỏ tab / đưa mục danh sách ra ngoài")}<i class="tb-sep"></i>
      ${tb("rteBlock('H3')","H","Tiêu đề đoạn")}${tb("rteCmd('insertUnorderedList')","•≡","Gạch đầu dòng")}${tb("rteCmd('insertOrderedList')","1.≡","Danh sách số")}${tb("rteAlign()",'<span class="tb-al">≡</span>',"Căn giữa / căn trái")}${tb("rteHr()","—","Đường kẻ ngăn đoạn")}<i class="tb-sep"></i>
      ${tb("rteUpper()","AA","IN HOA chữ đang chọn")}${tb("rteClear()","Tx","Xoá định dạng")}${tb("editorSize(-1)","A−","Chữ nhỏ lại")}${tb("editorSize(1)","A+","Chữ to lên")}
@@ -1380,19 +1380,30 @@ function blurEditable(){const a=document.activeElement;if(a&&a!==document.body&&
 document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="hidden")blurEditable();else setTimeout(()=>{if(!kbOpen())blurEditable();},250);});
 window.addEventListener("pagehide",blurEditable);
 (function rteTapKeyboard(){
+  // Mọi lần chạm nhanh bằng ngón tay vào kịch bản khi bàn phím đang đóng → focus lại ngay trong lần chạm để iOS mở bàn phím.
+  // Kể cả khi đang có chữ được bôi chọn (chạm vào vùng chọn thì giữ nguyên vùng chọn, chạm chỗ khác thì đặt con trỏ tại đó).
   let s=null,lastTap=0;
   document.addEventListener("touchstart",e=>{s=null;const b=rteEl();if(!b||e.touches.length!==1||!b.contains(e.target))return;
-    const t=e.touches[0],sel=getSelection();if(t.touchType==="stylus")return;   // bút: iPad dùng chế độ viết tay (Scribble), không can thiệp
-    s={x:t.clientX,y:t.clientY,at:Date.now(),focused:document.activeElement===b,range:!!(sel&&sel.rangeCount&&!sel.isCollapsed)};},{passive:true,capture:true});
+    const t=e.touches[0];if(t.touchType==="stylus")return;   // bút: iPad dùng chế độ viết tay (Scribble), không can thiệp
+    const sel=getSelection();let inSel=null;
+    try{if(sel&&sel.rangeCount&&!sel.isCollapsed&&b.contains(sel.anchorNode)){const rg=sel.getRangeAt(0);if([...rg.getClientRects()].some(q=>t.clientX>=q.left-6&&t.clientX<=q.right+6&&t.clientY>=q.top-6&&t.clientY<=q.bottom+6))inSel=rg.cloneRange();}}catch(_){}
+    s={x:t.clientX,y:t.clientY,at:Date.now(),inSel};},{passive:true,capture:true});
   document.addEventListener("touchend",e=>{const b=rteEl(),st=s;s=null;if(!b||!st)return;
     const t=e.changedTouches&&e.changedTouches[0],now=Date.now(),dbl=now-lastTap<400;lastTap=now;
-    if(!t||!st.focused||st.range||dbl||now-st.at>350||Math.hypot(t.clientX-st.x,t.clientY-st.y)>10)return;   // chỉ chạm nhanh 1 lần (không phải kéo, chạm đúp, nhấn giữ, chỉnh vùng chọn)
-    if(kbOpen()||document.activeElement!==b)return;   // bàn phím đang hiện → để iOS tự xử lý
-    let r=null;try{r=document.caretRangeFromPoint?document.caretRangeFromPoint(t.clientX,t.clientY):null;}catch(_){}
-    b.blur();b.focus({preventScroll:true});
-    if(r&&b.contains(r.startContainer)){const sel=getSelection();sel.removeAllRanges();sel.addRange(r);}
+    if(!t||dbl||now-st.at>350||Math.hypot(t.clientX-st.x,t.clientY-st.y)>10)return;   // chỉ chạm nhanh 1 lần (không phải kéo, chạm đúp, nhấn giữ)
+    if(kbOpen())return;   // bàn phím đang hiện → để iOS tự xử lý
+    let r=st.inSel;if(!r){try{r=document.caretRangeFromPoint?document.caretRangeFromPoint(t.clientX,t.clientY):null;}catch(_){}}
+    kbFocus(r);
   },{passive:true,capture:true});
 })();
+// Giữ vị trí con trỏ / vùng chọn gần nhất trong kịch bản (để nút ⌨︎ mở bàn phím đúng chỗ)
+let rteLastRange=null;
+document.addEventListener("selectionchange",()=>{const b=rteEl(),sl=getSelection();if(b&&sl&&sl.rangeCount&&b.contains(sl.anchorNode))rteLastRange=sl.getRangeAt(0).cloneRange();});
+function kbFocus(r){const b=rteEl();if(!b)return;if(document.activeElement===b)b.blur();b.focus({preventScroll:true});
+  if(r&&b.contains(r.startContainer)){const sl=getSelection();sl.removeAllRanges();sl.addRange(r);}}
+// Nút ⌨︎ trên thanh công cụ: chắc chắn mở bàn phím (một lần chạm vào nút = iOS cho phép mở)
+function kbForce(){const b=rteEl();if(!b)return;let r=rteLastRange&&b.contains(rteLastRange.startContainer)?rteLastRange:null;
+  if(!r){r=document.createRange();r.selectNodeContents(b);r.collapse(false);}kbFocus(r);}
 // V28.19 — Bút (Apple Pencil / bút cảm ứng tương thích): khi chạm vào ô chữ bằng bút, iPadOS bật "Viết tay" (Scribble) thay vì
 // mở bàn phím — đây là cách iPad hoạt động, web app không đổi được. Hiện hướng dẫn ngắn ngay trong màn soạn (đến khi bấm Đã hiểu).
 const PEN_HINT="mcta_pen_hint";
