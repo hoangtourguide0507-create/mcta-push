@@ -22,6 +22,7 @@
  *   POST /translate {text, style, glossary, before, after}  (x-app-key)  dịch Anh ↔ Việt: Gemini (khoá miễn phí) → dự phòng Workers AI
  *   POST /aikey {key} · POST /aistatus  (x-app-key)  lưu / kiểm tra khoá Gemini
  *   POST /pdf2text  (x-app-key, body = file PDF)  Gemini đọc PDF (cả bản scan) → Markdown để nhập kịch bản
+ *   POST /livetr {text, glossary, keep, ctx}  (x-app-key)  Dịch live Việt → Anh cho MC đọc ngay — trả chữ dạng luồng (stream)
  *   POST /fetchdoc {url}  (x-app-key)  tải hộ Google Tài liệu (.docx) / Trang tính (.xlsx) / Drive để nhập kịch bản
  *   GET  /status                                  → { setup, hasState }
  *   POST /setup   { key, from }                     đặt mã truy cập lần đầu (hoặc kiểm tra mã);
@@ -32,6 +33,18 @@
 
 const PDF_MAX = 14.5 * 1048576;
 const DOC_MAX = 15 * 1048576;
+// luồng SSE của Gemini ("data: {...}") → chỉ phần chữ trả lời (bỏ phần "suy nghĩ"), gửi dần về app
+function sseText(body) {
+  const dec = new TextDecoder(), enc = new TextEncoder(); let buf = '';
+  const pick = (line, ctl) => {
+    if (!line.startsWith('data:')) return;
+    try { const j = JSON.parse(line.slice(5).trim()); const t = (((j.candidates || [])[0] || {}).content?.parts || []).filter(p => !p.thought).map(p => p.text || '').join(''); if (t) ctl.enqueue(enc.encode(t)); } catch { }
+  };
+  return body.pipeThrough(new TransformStream({
+    transform(chunk, ctl) { buf += dec.decode(chunk, { stream: true }); let i; while ((i = buf.indexOf('\n')) >= 0) { const line = buf.slice(0, i).replace(/\r$/, ''); buf = buf.slice(i + 1); pick(line, ctl); } },
+    flush(ctl) { buf += dec.decode(); if (buf.trim()) pick(buf.trim(), ctl); }
+  }));
+}
 // link chia sẻ Google → link tải file: Tài liệu → .docx, Trang tính → .xlsx, Trình bày → .pdf, Drive → file gốc.
 // '' = không phải link Google hợp lệ; null = link "Xuất bản lên web" (/d/e/…) chưa hỗ trợ
 function docExportUrl(raw) {
@@ -340,6 +353,67 @@ ${before || after ? `\nSurrounding script for context only (do NOT translate or 
     return json({ ok: false, loi: quota ? 'Hết lượt dịch miễn phí lúc này — thử lại sau ít phút (hoặc sáng mai)' : (key || (this.env && this.env.AI) ? 'Dịch lỗi: ' + errs.join(' · ').slice(0, 200) : 'Chưa có khoá Gemini — vào Khác → Dịch kịch bản để dán khoá'), detail: errs }, 502);
   }
 
+  // ---- Dịch live: MC gõ tiếng Việt → câu tiếng Anh ngắn gọn để đọc ngay trên sân khấu ----
+  // Ưu tiên bản Gemini "lite" (nhanh nhất), suy nghĩ ở mức tối thiểu, trả chữ dần dần (stream) để hiện ngay từ chữ đầu tiên.
+  livePrompt(glossary, keep, ctx) {
+    const gl = (glossary || []).slice(0, 120).map(g => `- "${g.vi}" → "${g.en}"`).join('\n');
+    const kp = (keep || []).slice(0, 60).map(k => `- ${k}`).join('\n');
+    return `You are the live interpreter in the ear of Thiên Ân, a bilingual Vietnamese–English MC on stage at a wedding or event in Vietnam.
+The MC types Vietnamese; you return English the MC will read aloud IMMEDIATELY, at a glance, into the microphone.
+
+Rules:
+1. Output ONLY the English to be spoken. No quotes, labels, notes, alternatives or explanations.
+2. Short, clear, natural spoken English in a warm, polished MC voice. Prefer short sentences; cut filler words, but keep every fact: names, titles, numbers, times, places, who does what.
+3. Keep personal names, family names, company, brand, venue and band names exactly as written, with Vietnamese diacritics. Honorifics: Ông → Mr., Bà → Mrs. (Ms. if unsure), Anh/Chị before a name → just the name (or Mr./Ms. in formal speech); "cô dâu" = the bride, "chú rể" = the groom, "nhà trai/nhà gái" = the groom's/bride's family, "quý vị" = ladies and gentlemen / everyone.
+4. Use the standard MC phrasing: "Kính thưa quý vị" → "Ladies and gentlemen"; "Xin trân trọng kính mời…" → "Please welcome…" / "It is my honour to invite…"; "Xin một tràng pháo tay" → "Let's give a big round of applause"; "Xin mời quý vị nâng ly" → "Please raise your glasses".
+5. If the input is a fragment or a keyword list, give the natural spoken English for it. Keep [stage cues] in brackets. If the input is already English, return it polished and shorter.
+6. Never add content that is not in the input.${gl ? `\n\nAlways use this glossary:\n${gl}` : ''}${kp ? `\n\nKeep exactly as written:\n${kp}` : ''}${ctx ? `\n\nEvent context (for names and tone only — do not translate or output it): ${String(ctx).slice(0, 300)}` : ''}`;
+  }
+  async liveTr(req) {
+    if (req.method !== 'POST') return json({ ok: false }, 405);
+    const bad = await this.aiAuth(req); if (bad) return bad;
+    const q = await req.json().catch(() => ({}));
+    const text = String(q.text || '').trim().slice(0, 1500);
+    if (!text) return json({ ok: false, loi: 'Không có chữ để dịch' }, 400);
+    const glossary = Array.isArray(q.glossary) ? q.glossary.filter(g => g && g.vi && g.en).map(g => ({ vi: clip(g.vi, 80), en: clip(g.en, 80) })) : [];
+    const keep = Array.isArray(q.keep) ? q.keep.map(k => clip(k, 60)).filter(Boolean) : [];
+    const sys = this.livePrompt(glossary, keep, q.ctx);
+    const errs = [];
+    const key = (this.env && this.env.GEMINI_API_KEY) || await this.st.get('gemini:key');
+    if (key && !q.cloudflare) {
+      const stored = (await this.st.get('gemini:models')) || ['gemini-3.5-flash-lite', 'gemini-3.8-flash'];
+      const models = [...stored.filter(m => /lite/.test(m)), ...stored.filter(m => !/lite/.test(m))].slice(0, 3);
+      for (const m of models) {
+        for (const level of ['minimal', 'low']) {
+          let r;
+          try {
+            r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${m}:streamGenerateContent?alt=sse`, {
+              method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
+              body: JSON.stringify({ system_instruction: { parts: [{ text: sys }] }, contents: [{ role: 'user', parts: [{ text }] }], generationConfig: { thinkingConfig: { thinkingLevel: level }, maxOutputTokens: 800 } })
+            });
+          } catch (e) { errs.push(m + ': ' + String(e.message).slice(0, 60)); break; }
+          if (!r.ok) {
+            const j = await r.json().catch(() => ({})), msg = String((j.error && (j.error.message || j.error.status)) || r.status);
+            if (r.status === 400 && level === 'minimal' && /think/i.test(msg)) continue;   // mô hình không nhận mức "minimal" → thử "low"
+            errs.push(m + ': ' + ((j.error && j.error.status) || r.status)); break;
+          }
+          return new Response(sseText(r.body), { status: 200, headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store', 'x-provider': 'gemini', 'x-model': m, 'Access-Control-Expose-Headers': 'x-provider, x-model', ...CORS } });
+        }
+      }
+    }
+    if (this.env && this.env.AI) {
+      for (const m of ['@cf/aisingapore/gemma-sea-lion-v4-27b-it', '@cf/google/gemma-3-12b-it']) {
+        try {
+          const r = await this.env.AI.run(m, { messages: [{ role: 'system', content: sys }, { role: 'user', content: text }], max_tokens: 600 });
+          const out = String(r && (r.response ?? r.result?.response) || '').replace(/^\s*(here is|here's|translation|bản dịch)[^\n]*:\s*\n/i, '').replace(/^["“](.*)["”]$/s, '$1').trim();
+          if (out) return new Response(out, { status: 200, headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store', 'x-provider': 'cloudflare', 'x-model': m.split('/').pop(), 'Access-Control-Expose-Headers': 'x-provider, x-model', ...CORS } });
+        } catch (e) { errs.push(m.split('/').pop() + ': ' + String(e.message).slice(0, 60)); }
+      }
+    }
+    const quota = errs.some(e => /RESOURCE_EXHAUSTED|429|limit|neuron/i.test(e));
+    return json({ ok: false, loi: quota ? 'Hết lượt dịch miễn phí lúc này — thử lại sau ít phút' : (key || (this.env && this.env.AI) ? 'Dịch lỗi: ' + errs.join(' · ').slice(0, 200) : 'Chưa có khoá Gemini — vào Khác → 🌐 Dịch kịch bản để dán khoá'), detail: errs }, 502);
+  }
+
   // ---- Nhập kịch bản từ link Google: trình duyệt không tải thẳng được (CORS) nên máy chủ tải hộ ----
   // Chỉ nhận link Google (không phải proxy mở), cần mã truy cập; file phải mở chia sẻ "Bất kỳ ai có đường liên kết".
   async fetchDoc(req) {
@@ -471,6 +545,7 @@ Rules:
       if (p === '/aistatus') return await this.aiStatus(req);
       if (p === '/pdf2text') return await this.pdf2text(req);
       if (p === '/fetchdoc') return await this.fetchDoc(req);
+      if (p === '/livetr') return await this.liveTr(req);
       if (!['/plan', '/devices', '/sub', '/unsub', '/test'].includes(p)) return json({ ok: false, loi: 'Không có đường dẫn này' }, 404);
       if (req.method !== 'POST') return json({ ok: false, loi: 'Sai phương thức' }, 405);
       const q = await req.json().catch(() => ({}));
