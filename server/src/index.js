@@ -22,7 +22,7 @@
  *   POST /translate {text, style, glossary, before, after}  (x-app-key)  dịch Anh ↔ Việt: Gemini (khoá miễn phí) → dự phòng Workers AI
  *   POST /aikey {key} · POST /aistatus  (x-app-key)  lưu / kiểm tra khoá Gemini
  *   POST /pdf2text  (x-app-key, body = file PDF)  Gemini đọc PDF (cả bản scan) → Markdown để nhập kịch bản
- *   POST /livetr {text, glossary, keep, ctx}  (x-app-key)  Dịch live Việt → Anh cho MC đọc ngay — trả chữ dạng luồng (stream)
+ *   POST /livetr {text, engine?, glossary, keep, ctx}  (x-app-key)  Dịch live Việt → Anh (engine 'google' = Google Dịch trước) — trả chữ thường / luồng
  *   POST /fetchdoc {url}  (x-app-key)  tải hộ Google Tài liệu (.docx) / Trang tính (.xlsx) / Drive để nhập kịch bản
  *   GET  /status                                  → { setup, hasState }
  *   POST /setup   { key, from }                     đặt mã truy cập lần đầu (hoặc kiểm tra mã);
@@ -379,6 +379,17 @@ Rules:
     const keep = Array.isArray(q.keep) ? q.keep.map(k => clip(k, 60)).filter(Boolean) : [];
     const sys = this.livePrompt(glossary, keep, q.ctx);
     const errs = [];
+    const hdr = (prov, model) => ({ 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store', 'x-provider': prov, 'x-model': model, 'Access-Control-Expose-Headers': 'x-provider, x-model', ...CORS });
+    // 0) Google Dịch (dịch thẳng, nhanh nhất ~0,2–0,5 giây) — dùng cho dịch bài phát biểu
+    if (q.engine === 'google') {
+      try {
+        const ctl = new AbortController(), to = setTimeout(() => ctl.abort(), 3000);
+        const r = await fetch('https://translate.googleapis.com/translate_a/single?client=gtx&sl=vi&tl=en&dt=t&q=' + encodeURIComponent(text), { signal: ctl.signal, headers: { 'User-Agent': 'Mozilla/5.0' } });
+        clearTimeout(to);
+        if (r.ok) { const j = await r.json(); const out = ((j && j[0]) || []).map(x => (x && x[0]) || '').join('').trim(); if (out) return new Response(out, { status: 200, headers: hdr('google', 'translate') }); errs.push('google: trống'); }
+        else errs.push('google: ' + r.status);
+      } catch (e) { errs.push('google: ' + String(e.message).slice(0, 60)); }
+    }
     const key = (this.env && this.env.GEMINI_API_KEY) || await this.st.get('gemini:key');
     if (key && !q.cloudflare) {
       const stored = (await this.st.get('gemini:models')) || ['gemini-3.5-flash-lite', 'gemini-3.8-flash'];

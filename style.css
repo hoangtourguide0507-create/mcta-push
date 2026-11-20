@@ -1139,3 +1139,30 @@ button{color:inherit}
 .live.light .live-go{color:#fff}
 .live.kb .live-in{padding-bottom:10px}
 .rd-live{white-space:nowrap}
+/* V28.22: Dịch live bài phát biểu (máy nhắc chữ) */
+.home-cta-row{display:flex;gap:10px;align-items:stretch;margin:4px 0 14px}
+.home-cta-row .add-job-cta{flex:1;margin:0;width:auto}
+.live-mini{flex:none;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;min-width:74px;padding:6px 10px;border-radius:16px;border:1.5px solid var(--line);background:var(--paper);color:var(--ink);font:inherit;font-size:11.5px;font-weight:800;cursor:pointer}
+.live-mini span{font-size:19px;line-height:1}
+.live-hold{position:relative;overflow:hidden;flex:none;min-width:44px;height:40px;padding:0 12px;border-radius:12px;border:1px solid var(--lv-line);background:var(--lv-card);color:inherit;font:inherit;font-weight:800;font-size:15px;cursor:pointer;-webkit-user-select:none;user-select:none;touch-action:none}
+.live-hold.wide{font-size:13px}
+.live-hold .lh-txt{position:relative;z-index:1}
+.live-hold .lh-fill{position:absolute;inset:0;background:var(--lv-accent);opacity:.35;transform:scaleX(0);transform-origin:left}
+.live-hold.holding .lh-fill{transform:scaleX(1);transition:transform .9s linear}
+.live-flow{display:flex;flex-direction:column;gap:18px;padding-bottom:8px}
+.live-seg .live-en{opacity:.55;transition:opacity .25s}
+.live-seg.last .live-en{opacity:1}
+.live-seg .live-src{margin:6px 0 0;font-size:14px}
+.live-seg.err .live-en{font-size:15px}
+.live-errtxt{color:#f87171;font-weight:700;font-size:15px}
+.live-dots{display:inline-flex;gap:6px;vertical-align:middle}
+.live-dots i{width:.28em;height:.28em;border-radius:50%;background:var(--lv-accent);animation:livedot 1s infinite ease-in-out}
+.live-dots i:nth-child(2){animation-delay:.15s}.live-dots i:nth-child(3){animation-delay:.3s}
+@keyframes livedot{0%,80%,100%{opacity:.25;transform:scale(.8)}40%{opacity:1;transform:scale(1)}}
+.live-empty ol{margin:10px 0 12px;padding-left:22px}
+.live-empty li{margin:4px 0}
+.live-empty b{color:inherit}
+.live-prev{margin-top:22px;border-top:1px solid var(--lv-line);padding-top:12px}
+.live-prev .live-item b{display:block;margin-bottom:4px}
+.live-viewbar{display:flex;justify-content:center;padding:8px 0}
+.live-viewbar button{border:1px solid var(--lv-line);background:var(--lv-card);color:inherit;border-radius:12px;padding:9px 16px;font:inherit;font-weight:800;cursor:pointer}

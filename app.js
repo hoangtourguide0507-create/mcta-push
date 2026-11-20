@@ -1,5 +1,5 @@
 
-const APP_VERSION="V28.21";
+const APP_VERSION="V28.22";
 // V28.0: app chạy trên GitHub Pages; dữ liệu + thông báo nằm trên máy chủ Cloudflare riêng (mcta-push).
 const CLOUD_DEFAULT="https://mcta-push.hoangtourguide0507.workers.dev";
 const KEY="freelance_planner_v12";
@@ -700,7 +700,7 @@ home(){
  const endKey=`${mKey}-31`;const dueJobs=state.jobs.filter(j=>isBillable(j)&&fin(j).due>0&&(j.date||"")<=endKey);
  const due=dueJobs.reduce((s,j)=>s+fin(j).due,0);const overdueN=dueJobs.filter(j=>!isNotOver(j)&&!(j.date||"").startsWith(mKey)).length;
  const dayText=n?`${relLabel(n)} · ${shortDate(n.date)}${hasTime(n)?" · "+n.time:""}`:"Chưa có show";
- return `<button class="black-btn add-job-cta" onclick="openJobForm()"><span class="cta-plus">${icon("plus",20)}</span>Thêm job mới</button>
+ return `<div class="home-cta-row"><button class="black-btn add-job-cta" onclick="openJobForm()"><span class="cta-plus">${icon("plus",20)}</span>Thêm job mới</button><button class="live-mini" onclick="openLive()" aria-label="Dịch live"><span>🌐</span>Dịch live</button></div>
  ${(()=>{if(localMode||!pushSupported()||Notification.permission!=="default"||pushMeta().enabled===false||pushMeta().nudgeHidden)return"";if(isIOS()&&!isStandalone())return"";return `<div class="notify-nudge"><span>🔔</span><button class="nn-main" onclick="enablePush()"><b>Bật thông báo trên máy này</b><small>Nhắc show, lịch họp và thu tiền — kể cả khi khoá màn hình</small></button><button class="nn-x" aria-label="Ẩn" onclick="setPushMeta({...pushMeta(),nudgeHidden:true});render()">×</button></div>`;})()}
  ${(()=>{const dr=getDraft("new");return dr?`<div class="draft-resume"><span class="draft-dot"></span><button class="draft-open" onclick="restoreDraft('new')"><b>Job đang nhập dở</b><span>${esc(dr.job?.title||"(chưa đặt tên)")} · ${esc(draftTimeText(dr))}</span></button><button class="draft-go" onclick="restoreDraft('new')">Tiếp tục ›</button><button class="draft-del" aria-label="Xoá nháp" onclick="discardDraft('new')">Xoá</button></div>`:"";})()}
  ${n?`<section class="hero" onclick="openJob('${n.id}')"><div class="hero-top"><span class="eyebrow">SHOW TIẾP THEO</span><span class="hero-pill">${esc(n.status)}</span></div><div class="hero-title">${esc(n.title)}</div><div class="hero-meta">${fmtDate(n.date)}${n.time?` • ${esc(n.time)}`:""}</div><div class="hero-location"><span>${icon("pin",13)} ${esc(n.locationName||n.location||"Chưa có địa điểm")}</span>${n.locationAddress?`<small>${esc(n.locationAddress)}</small>`:""}</div><div class="hero-bottom"><span class="countdown">${dayText}</span><span class="hero-arrow">${icon("chevron",17)}</span></div></section>`:`<div class="empty hero-empty">Chưa có show sắp tới.</div>`}
@@ -774,7 +774,7 @@ notes(){
  const days={"7":7,"30":30,"90":90}[noteRange];if(days)arr=arr.filter(n=>noteTime(n)>=Date.now()-days*86400000);
  arr.sort((a,b)=>{if(noteSort==="az")return (a.title||"").localeCompare(b.title||"","vi");if(noteSort==="show"){const ja=noteJob(a),jb=noteJob(b);return (ja?ja.date+(ja.time||""):"9999").localeCompare(jb?jb.date+(jb.time||""):"9999");}if(noteSort==="created")return (b.createdAt||"").localeCompare(a.createdAt||"");return noteTime(b)-noteTime(a);});
  const chip=(v,l)=>`<button class="filter ${noteFilter===v?"active":""}" onclick="noteFilter='${v}';render()">${l}</button>`;
- return `<div class="section-head"><span class="small"><b>${state.notes.length}</b> kịch bản · ${state.notes.filter(n=>noteJob(n)).length} đã gắn job</span><span class="notes-head-btns"><button class="outline-btn live-btn" onclick="openLive()">🌐 Dịch live</button><button class="outline-btn pdf-in-btn" onclick="scriptImport()">📥 Nhập kịch bản</button><button class="black-btn" onclick="openNote()">${icon("plus",15)} Viết mới</button></span></div>
+ return `<div class="section-head"><span class="small"><b>${state.notes.length}</b> kịch bản · ${state.notes.filter(n=>noteJob(n)).length} đã gắn job</span><span class="notes-head-btns"><button class="outline-btn pdf-in-btn" onclick="scriptImport()">📥 Nhập kịch bản</button><button class="black-btn" onclick="openNote()">${icon("plus",15)} Viết mới</button></span></div>
  <div class="search-wrap"><span>${icon("search",17)}</span><input class="search" id="noteSearchInput" value="${esc(noteSearch)}" placeholder="Tìm tiêu đề, nội dung, tên job…" oninput="noteSearch=this.value;render();const el=document.getElementById('noteSearchInput');el.focus();el.setSelectionRange(el.value.length,el.value.length)"></div>
  <div class="filter-row">${chip("all","Tất cả")}${chip("upcoming","Job sắp diễn ra")}${chip("linked","Đã gắn job")}${chip("free","Chưa gắn job")}</div>
  <div class="note-tools"><select class="field-control" onchange="noteSort=this.value;render()"><option value="edited" ${noteSort==="edited"?"selected":""}>Mới sửa gần đây</option><option value="created" ${noteSort==="created"?"selected":""}>Mới tạo</option><option value="show" ${noteSort==="show"?"selected":""}>Theo ngày diễn ra</option><option value="az" ${noteSort==="az"?"selected":""}>Tên A → Z</option></select><select class="field-control" onchange="noteRange=this.value;render()"><option value="all" ${noteRange==="all"?"selected":""}>Mọi thời gian</option><option value="7" ${noteRange==="7"?"selected":""}>Sửa trong 7 ngày</option><option value="30" ${noteRange==="30"?"selected":""}>Sửa trong 30 ngày</option><option value="90" ${noteRange==="90"?"selected":""}>Sửa trong 90 ngày</option></select></div>
@@ -1082,7 +1082,7 @@ function openJob(id){
  ${(()=>{const ms=jobMeetings(j);const tNow=new Date();tNow.setHours(0,0,0,0);return `<section class="section compact meeting-detail"><div class="section-head"><h3>Lịch họp</h3><button class="text-btn" onclick="openJobForm(state.jobs.find(x=>x.id==='${j.id}'));setTimeout(()=>document.querySelector('.meeting-box')?.scrollIntoView({behavior:'smooth'}),150)">${ms.length?"Cập nhật":"＋ Thêm"}</button></div>${ms.length?ms.map(m=>{const past=new Date(m.date+"T00:00:00")<tNow;const rem=(m.reminders||[]).filter(r=>r.enabled!==false);const href=m.mode==="Online"?safeHref(m.link):"";return `<div class="meeting-card ${past?"past":""}"><div class="meeting-when"><b>${esc(fmtLong(m.date))}${m.time?` • ${esc(m.time)}`:""}</b><span class="meet-mode meet-${m.mode==="Online"?"on":"off"}">${esc(m.mode)}</span></div><div class="meeting-where">${icon(m.mode==="Online"?"link":"pin",13)} ${esc(meetingWhere(m))}</div>${m.note?`<div class="small">${esc(m.note)}</div>`:""}<div class="meeting-actions">${m.mode==="Online"&&href?`<a class="map-link" href="${esc(href)}" target="_blank" rel="noopener">${icon("link",14)} Mở link họp</a>`:""}${m.mode!=="Online"&&m.place?`<a class="map-link" href="${esc(directionsUrl(m.place))}" target="_blank" rel="noopener">${icon("pin",14)} Chỉ đường</a><button type="button" class="map-link link-btn" onclick="copyText(this.dataset.q,this)" data-q="${esc(m.place)}">Copy địa chỉ</button>`:""}</div><div class="push-status small"><span class="push-dot ${rem.length?"on":""}"></span>${past?"Đã qua":rem.length?"Nhắc "+rem.map(x=>`trước ${labelMinutes(x.minutes)}`).join(" • "):"Không nhắc"}</div></div>`}).join(""):'<div class="empty">Chưa có lịch họp.</div>'}</section>`})()}
  <section class="section compact script-detail-section"><div class="section-head"><h3>Kịch bản</h3>${workNeedsAttention(j)?`<span class="work-mini warn">${esc(workLabel(j))}</span>`:`<span class="work-mini ok">${j.noScript&&!linkedNotes(j).length?"Không cần kịch bản":"Đã đủ"}</span>`}</div>
  <div class="job-scripts">${linkedNotes(j).sort((a,b)=>noteTime(b)-noteTime(a)).map(n=>`<div class="job-script-row"><div><b>${noteKind(n)==="lovestory"?'<i class="ls-tag">Love Story</i> ':""}${esc(n.title||"(Không tiêu đề)")}</b><span>${noteTime(n)?`Sửa ${esc(relTime(noteTime(n)))}`:"&nbsp;"}</span></div><button class="rd-btn" onclick="closeModal();openReader('${n.id}')">Đọc</button><button class="rd-btn" onclick="openJobAfterNote=true;openNote(state.notes.find(x=>x.id==='${n.id}'))">Sửa</button></div>`).join("")}
- <div class="job-script-adds"><button class="outline-btn job-script-add" onclick="openJobAfterNote=true;openNote(null,{jobId:'${j.id}'})">＋ Viết kịch bản</button><button class="outline-btn job-script-add" onclick="scriptImport('${j.id}')">📥 Nhập kịch bản</button><button class="outline-btn job-script-add" onclick="openLive('${j.id}')">🌐 Dịch live</button>${isWedding(j)?`<button class="outline-btn job-script-add" onclick="openJobAfterNote=true;openNote(null,{jobId:'${j.id}',kind:'lovestory'})">＋ Viết Love Story</button>`:""}</div>
+ <div class="job-script-adds"><button class="outline-btn job-script-add" onclick="openJobAfterNote=true;openNote(null,{jobId:'${j.id}'})">＋ Viết kịch bản</button><button class="outline-btn job-script-add" onclick="scriptImport('${j.id}')">📥 Nhập kịch bản</button>${isWedding(j)?`<button class="outline-btn job-script-add" onclick="openJobAfterNote=true;openNote(null,{jobId:'${j.id}',kind:'lovestory'})">＋ Viết Love Story</button>`:""}</div>
  ${(j.scriptLink||j.scriptNotes||j.loveStoryLink||j.loveStoryNotes)?`<details class="legacy-script"><summary>Link / ghi chú nhập trước đây</summary>${j.scriptLink?`<a class="script-link" href="${esc(safeHref(j.scriptLink)||"#")}" target="_blank" rel="noopener">${icon("link",14)} File kịch bản</a>`:""}${j.scriptNotes?`<div class="note-body script-note">${esc(j.scriptNotes)}</div>`:""}${j.loveStoryLink?`<a class="script-link" href="${esc(safeHref(j.loveStoryLink)||"#")}" target="_blank" rel="noopener">${icon("link",14)} File Love Story</a>`:""}${j.loveStoryNotes?`<div class="note-body script-note"><b>Love Story:</b> ${esc(j.loveStoryNotes)}</div>`:""}</details>`:""}
  </div></section>
  ${isWedding(j)||j.lsCode?`<section class="section compact ls-section"><div class="section-head"><h3>💌 Love Story</h3>${j.lsCode?`<button class="text-btn" onclick="LS.at=0;hydrateLoveStory(state.jobs.find(x=>x.id==='${j.id}'))">Làm mới</button>`:""}</div><div id="lsWrap"></div></section>`:""}
@@ -1468,84 +1468,105 @@ function openReader(id){
   <div class="reader-bar bottom"><button class="rd-btn big" onclick="readerSize(-2)">A−</button><span class="rd-size" id="rdSize">${p.size}px</span><button class="rd-btn big" onclick="readerSize(2)">A+</button><button class="rd-btn" id="rdPlay" onclick="readerAuto()">${p.speed?"⏸":"▶︎"} Tự cuộn</button><button class="rd-btn" onclick="readerSpeed(-1)">−</button><span class="rd-size" id="rdSpeed">${readerSpeedLabel(p)}</span><button class="rd-btn" onclick="readerSpeed(1)">+</button></div>`;
   r.dataset.auto="0";r.hidden=false;document.documentElement.classList.add("reader-open");keepAwake(true);
 }
-// ---- V28.21: Dịch live — MC gõ tiếng Việt, câu tiếng Anh ngắn gọn hiện ngay (chữ hiện dần) để đọc trên sân khấu ----
-// Tự dịch khi ngừng gõ ~0,7 giây; Enter/“Dịch” = chốt câu và xoá ô gõ để gõ câu tiếp. Dùng khoá Gemini miễn phí (bản lite, nhanh nhất);
-// hết lượt thì tự chuyển sang Cloudflare Workers AI. Màn hình luôn sáng khi đang mở.
-const LIVE_HIST="mcta_live_hist",LIVE_PREF="mcta_live_pref";
-let liveJob="",liveSeq=0,liveCtl=null,liveTimer=null,liveCur=null;const liveCache=new Map();
-function livePrefs(){try{return {fs:28,dark:true,...JSON.parse(localStorage.getItem(LIVE_PREF)||"{}")};}catch(_){return {fs:28,dark:true};}}
+// ---- V28.22: Dịch live bài phát biểu — điện thoại nghe khách nói (🎤 đọc chính tả trên bàn phím Apple), ngừng ~1 giây là dịch phần mới ----
+// Màn hình kiểu máy nhắc chữ: tiếng Anh chữ lớn nối tiếp, tự cuộn; tiếng Việt chữ nhỏ dưới mỗi đoạn để đối chiếu. Không có nút nhỏ giữa màn hình;
+// nút thoát / bài mới phải GIỮ 1 giây (chống chạm nhầm). Dịch: Google Dịch (nhanh, gọi thẳng từ máy) → máy chủ (Google → Gemini → Cloudflare AI).
+const LIVE_LOG="mcta_live_log",LIVE_PREF="mcta_live_pref";
+let liveJob="",liveSegs=[],liveTimer=null,liveLastCut=0,liveFollow=true,liveFollowT=null,liveSession=null,liveDirect=null,liveView=false;
+function livePrefs(){try{return {fs:30,...JSON.parse(localStorage.getItem(LIVE_PREF)||"{}")};}catch(_){return {fs:30};}}
 function liveSavePrefs(p){try{localStorage.setItem(LIVE_PREF,JSON.stringify(p));}catch(_){}}
-function liveHist(){try{const h=JSON.parse(localStorage.getItem(LIVE_HIST)||"[]");return Array.isArray(h)?h:[];}catch(_){return [];}}
-function liveSaveHist(h){try{localStorage.setItem(LIVE_HIST,JSON.stringify(h.slice(0,40)));}catch(_){}}
+function liveLog(){try{const h=JSON.parse(localStorage.getItem(LIVE_LOG)||"[]");return Array.isArray(h)?h:[];}catch(_){return [];}}
+function liveSaveLog(h){try{localStorage.setItem(LIVE_LOG,JSON.stringify(h.slice(0,12)));}catch(_){}}
 function openLive(jobId=""){
-  liveJob=jobId||"";const p=livePrefs();const j=liveJob&&state.jobs.find(x=>x.id===liveJob);
+  liveJob=jobId||"";liveSegs=[];liveSession=null;liveView=false;liveFollow=true;const p=livePrefs();const j=liveJob&&state.jobs.find(x=>x.id===liveJob);
   let el=document.getElementById("live");if(!el){el=document.createElement("div");el.id="live";document.body.appendChild(el);}
-  el.className=`live ${p.dark?"dark":"light"}`;el.style.setProperty("--live-fs",p.fs+"px");
-  el.innerHTML=`<div class="live-bar"><button type="button" class="rd-btn" onclick="closeLive()" aria-label="Đóng">✕</button>
-    <div class="live-title"><b>Dịch live</b><span>Việt → Anh${j?` · ${esc(j.title)}`:""}</span></div>
-    <button type="button" class="rd-btn" onclick="liveSize(-2)" aria-label="Chữ nhỏ hơn">A−</button><button type="button" class="rd-btn" onclick="liveSize(2)" aria-label="Chữ to hơn">A+</button>
-    <button type="button" class="rd-btn" onclick="liveTheme()" aria-label="Đổi nền">${p.dark?"☀︎":"☾"}</button></div>
-   <div class="live-out" id="liveOut"><div class="live-cur" id="liveCur"><div class="live-empty">Gõ tiếng Việt ở ô bên dưới — câu tiếng Anh hiện ngay tại đây, đủ to để đọc trên sân khấu.<br><span>Ngừng gõ là tự dịch · Enter để chốt câu và gõ câu tiếp</span></div></div><div class="live-hist" id="liveHist"></div></div>
-   <div class="live-in"><textarea id="liveIn" rows="2" enterkeyhint="send" autocomplete="off" placeholder="Gõ tiếng Việt…" oninput="liveInput()" onkeydown="liveKey(event)"></textarea><button type="button" class="live-go" onclick="liveCommit()">Dịch</button></div>`;
+  el.className="live dark";el.style.setProperty("--live-fs",p.fs+"px");
+  el.innerHTML=`<div class="live-bar" onpointerdown="if(event.target.closest('button'))event.preventDefault()" onmousedown="if(event.target.closest('button'))event.preventDefault()">
+      <button type="button" class="live-hold" data-act="close" aria-label="Giữ để thoát"><span class="lh-fill"></span><span class="lh-txt">✕</span></button>
+      <div class="live-title"><b>Dịch live</b><span id="liveSub">Việt → Anh${j?` · ${esc(j.title)}`:""}</span></div>
+      <button type="button" class="rd-btn" onclick="liveSize(-2)" aria-label="Chữ nhỏ hơn">A−</button><button type="button" class="rd-btn" onclick="liveSize(2)" aria-label="Chữ to hơn">A+</button>
+      <button type="button" class="live-hold wide" data-act="new" aria-label="Giữ để bắt đầu bài mới"><span class="lh-fill"></span><span class="lh-txt">Bài mới</span></button></div>
+    <div class="live-out" id="liveOut"><div class="live-flow" id="liveFlow"></div></div>
+    <div class="live-in"><textarea id="liveIn" rows="2" enterkeyhint="done" autocomplete="off" autocorrect="off" spellcheck="false" placeholder="Bấm 🎤 trên bàn phím để điện thoại nghe khách nói…" oninput="liveInput()" onkeydown="liveKey(event)"></textarea></div>`;
   el.hidden=false;document.documentElement.classList.add("live-open");keepAwake(true);
-  liveRenderHist();liveFit();
-  const inp=document.getElementById("liveIn");inp.focus({preventScroll:true});   // trong lần bấm nút → iOS mở bàn phím
+  el.querySelectorAll(".live-hold").forEach(liveHoldBind);
+  const out=document.getElementById("liveOut");
+  out.addEventListener("touchstart",()=>{liveFollow=false;clearTimeout(liveFollowT);},{passive:true});
+  out.addEventListener("touchend",()=>{clearTimeout(liveFollowT);liveFollowT=setTimeout(()=>{liveFollow=true;liveScroll(true);},5000);},{passive:true});   // lỡ cuộn lên → 5 giây sau tự về câu mới nhất
+  liveRender();liveFit();
+  document.getElementById("liveIn").focus({preventScroll:true});   // trong lần bấm nút → iOS mở bàn phím
 }
-function closeLive(){const el=document.getElementById("live");if(!el)return;liveAbort();clearTimeout(liveTimer);if(liveCur&&liveCur.en)liveArchive();
+// nút phải giữ 1 giây mới chạy (thanh màu chạy đầy) — chạm lướt qua không làm gì
+function liveHoldBind(b){let t=null;const start=e=>{e.preventDefault();b.classList.add("holding");t=setTimeout(()=>{b.classList.remove("holding");t=null;liveHoldDo(b.dataset.act);},900);};
+  const stop=()=>{if(t){clearTimeout(t);t=null;}b.classList.remove("holding");};
+  b.addEventListener("pointerdown",start);["pointerup","pointerleave","pointercancel"].forEach(ev=>b.addEventListener(ev,stop));
+  b.addEventListener("click",e=>{e.preventDefault();if(!b.classList.contains("holding")){const tip=b.querySelector(".lh-txt");if(tip&&!b.dataset.tip){b.dataset.tip="1";const o=tip.textContent;tip.textContent="Giữ…";setTimeout(()=>{tip.textContent=o;delete b.dataset.tip;},1200);}}});}
+function liveHoldDo(act){if(act==="close")closeLive();else if(act==="new")liveNew();}
+function closeLive(){const el=document.getElementById("live");if(!el)return;clearTimeout(liveTimer);liveSaveSession();
   el.hidden=true;el.innerHTML="";document.documentElement.classList.remove("live-open");
   if(!document.documentElement.classList.contains("reader-open"))keepAwake(false);}
+function liveNew(){clearTimeout(liveTimer);liveSaveSession();liveSegs=[];liveSession=null;liveView=false;const inp=document.getElementById("liveIn");if(inp){inp.value="";inp.focus({preventScroll:true});}liveRender();}
 function liveFit(){const el=document.getElementById("live");if(!el||el.hidden)return;const vv=window.visualViewport;
-  if(vv){el.style.top=vv.offsetTop+"px";el.style.height=vv.height+"px";}else{el.style.top="0";el.style.height="100%";}el.classList.toggle("kb",kbOpen());}
+  if(vv){el.style.top=vv.offsetTop+"px";el.style.height=vv.height+"px";}else{el.style.top="0";el.style.height="100%";}el.classList.toggle("kb",kbOpen());liveScroll();}
 if(window.visualViewport){visualViewport.addEventListener("resize",liveFit);visualViewport.addEventListener("scroll",liveFit);}
-function liveSize(d){const p=livePrefs();p.fs=Math.max(18,Math.min(64,p.fs+d));liveSavePrefs(p);document.getElementById("live")?.style.setProperty("--live-fs",p.fs+"px");}
-function liveTheme(){const p=livePrefs();p.dark=!p.dark;liveSavePrefs(p);const el=document.getElementById("live");if(el){el.classList.toggle("dark",p.dark);el.classList.toggle("light",!p.dark);const b=el.querySelector('[aria-label="Đổi nền"]');if(b)b.textContent=p.dark?"☀︎":"☾";}}
-function liveKey(e){if(e.key==="Enter"&&!e.shiftKey&&!e.isComposing){e.preventDefault();liveCommit();}}
-function liveInput(){clearTimeout(liveTimer);const t=(document.getElementById("liveIn")?.value||"").trim();if(!t)return;liveTimer=setTimeout(()=>liveRun(t,false),700);}
-function liveCommit(){clearTimeout(liveTimer);const inp=document.getElementById("liveIn");const t=(inp?.value||"").trim();if(!t)return;
-  liveRun(t,true);inp.value="";inp.focus({preventScroll:true});}
-function liveAbort(){if(liveCtl){try{liveCtl.abort();}catch(_){}liveCtl=null;}}
-// danh sách tên cần giữ nguyên: tên tự lưu + tên trong job (cô dâu chú rể, địa điểm) + cụm viết hoa trong câu
+function liveSize(d){const p=livePrefs();p.fs=Math.max(18,Math.min(64,p.fs+d));liveSavePrefs(p);document.getElementById("live")?.style.setProperty("--live-fs",p.fs+"px");liveScroll();}
+function liveKey(e){if(e.key==="Enter"&&!e.shiftKey&&!e.isComposing){e.preventDefault();clearTimeout(liveTimer);liveCut(true);}}
+// gõ / đọc chính tả: ngừng ~1 giây → dịch phần mới; nói liền một mạch dài → cứ ~5 giây cắt một đoạn ở chỗ hết từ
+function liveInput(){clearTimeout(liveTimer);if(liveView){liveView=false;liveSegs=[];liveRender();}
+  const v=document.getElementById("liveIn")?.value||"",sent=liveSegs.length?liveSegs[liveSegs.length-1].end:0,tail=v.slice(sent);
+  if(Date.now()-liveLastCut>5000&&tail.trim().length>=80){liveCut(false,true);return;}
+  liveTimer=setTimeout(()=>liveCut(false),950);}
+function liveCut(force,midSpeech){
+  const inp=document.getElementById("liveIn");if(!inp)return;const v=inp.value;
+  // đọc chính tả có thể sửa lại vài chữ vừa nghe → đoạn nào đã đổi thì bỏ và dịch lại từ đó
+  let k=liveSegs.findIndex(s=>v.slice(s.start,s.end)!==s.vi);if(k>=0){liveSegs.splice(k);}
+  if(!v.trim()){liveSegs=[];liveRender();return;}
+  let start=liveSegs.length?liveSegs[liveSegs.length-1].end:0,end=v.length;
+  if(midSpeech){const sub=v.slice(start);const m=sub.match(/^[\s\S]*[.!?;,…]\s/)||sub.match(/^[\s\S]*\s/);if(m&&m[0].trim().length>=30)end=start+m[0].length;}
+  const vi=v.slice(start,end);
+  if(!vi.trim()){const L=liveSegs[liveSegs.length-1];if(force&&L&&L.st==="err"){L.st="wait";L.en="";liveRender();liveTranslate(L);}else if(k>=0)liveRender();return;}   // Enter khi đoạn cuối lỗi → dịch lại
+  liveLastCut=Date.now();
+  const seg={start,end,vi,en:"",st:"wait",id:Math.random().toString(36).slice(2)};liveSegs.push(seg);liveRender();liveTranslate(seg);
+}
+function liveRender(){const box=document.getElementById("liveFlow");if(!box)return;
+  if(!liveSegs.length){const log=liveLog();
+    box.innerHTML=`<div class="live-empty"><b>Cách dùng</b><ol><li>Bấm <b>🎤</b> trên bàn phím (đọc chính tả của iPhone/iPad).</li><li>Đặt máy gần loa hoặc gần người nói.</li><li>Người nói ngừng khoảng 1 giây là câu tiếng Anh hiện ra — chỉ việc nhìn và đọc.</li></ol><span>Chỉnh cỡ chữ bằng A− / A+ trước khi lên sân khấu. Nút ✕ và Bài mới phải giữ 1 giây.</span></div>
+      ${log.length?`<div class="live-prev"><div class="live-hhead">Bài đã dịch</div>${log.slice(0,6).map((s,i)=>`<button type="button" class="live-item" onclick="liveOpenLog(${i})"><b>${esc((s.segs[0]&&s.segs[0].en||"").slice(0,90))}</b><span class="live-src">${new Date(s.at).toLocaleString("vi-VN",{hour:"2-digit",minute:"2-digit",day:"2-digit",month:"2-digit"})} · ${s.segs.length} đoạn${s.job?` · ${esc(s.job)}`:""}</span></button>`).join("")}</div>`:""}`;return;}
+  box.innerHTML=liveSegs.map((s,i)=>`<div class="live-seg${i===liveSegs.length-1?" last":""}${s.st==="err"?" err":""}"><div class="live-en">${s.en?esc(s.en):s.st==="err"?"":'<span class="live-dots"><i></i><i></i><i></i></span>'}${s.st==="err"?`<span class="live-errtxt">${esc(s.err||"Chưa dịch được")}</span>`:""}</div><div class="live-src">${esc(s.vi.trim())}</div></div>`).join("")
+    +(liveView?`<div class="live-viewbar"><button type="button" onclick="liveCopyAll(this)">📋 Chép cả bài</button></div>`:"");
+  liveScroll();}
+function liveScroll(force){const o=document.getElementById("liveOut");if(o&&(liveFollow||force))o.scrollTop=o.scrollHeight;}
+function liveOpenLog(i){const s=liveLog()[i];if(!s)return;liveSegs=s.segs.map(x=>({...x,st:"ok",start:0,end:0}));liveView=true;liveSession=null;liveRender();liveScroll(true);}
+function liveCopyAll(btn){copyText(liveSegs.map(s=>s.en).filter(Boolean).join("\n"),btn);}
+function liveSaveSession(){if(liveView)return;const segs=liveSegs.filter(s=>s.en).map(s=>({vi:s.vi.trim(),en:s.en}));if(!segs.length)return;
+  const log=liveLog();const job=liveJob&&state.jobs.find(x=>x.id===liveJob);
+  if(liveSession&&log[0]&&log[0].at===liveSession)log[0].segs=segs;else{liveSession=Date.now();log.unshift({at:liveSession,job:job?job.title:"",segs});}
+  liveSaveLog(log);}
+// dịch một đoạn: Google Dịch gọi thẳng (nhanh nhất) → không được thì qua máy chủ (Google → Gemini → Cloudflare AI)
+async function liveGoogleDirect(text){
+  const ctl=new AbortController(),to=setTimeout(()=>ctl.abort(),2500);
+  try{const r=await fetch("https://translate.googleapis.com/translate_a/single?client=gtx&sl=vi&tl=en&dt=t&q="+encodeURIComponent(text),{signal:ctl.signal});
+    if(!r.ok)throw new Error("google "+r.status);const j=await r.json();const out=(j&&j[0]||[]).map(x=>x&&x[0]||"").join("").trim();if(!out)throw new Error("trống");return out;}
+  finally{clearTimeout(to);}}
+async function liveTranslate(seg){
+  const text=seg.vi.trim();let out="",err="";
+  if(liveDirect!==false){try{out=await liveGoogleDirect(text);liveDirect=true;}catch(e){if(liveDirect===null)liveDirect=false;}}   // trình duyệt chặn (CORS) → các lần sau đi thẳng qua máy chủ
+  if(!out){
+    if(!accessKey())err="Chưa kết nối máy chủ — vào Khác → Đồng bộ";
+    else try{const job=liveJob&&state.jobs.find(x=>x.id===liveJob);const prev=liveSegs.slice(Math.max(0,liveSegs.indexOf(seg)-2),liveSegs.indexOf(seg)).map(s=>s.vi.trim()).join(" ");
+      const r=await fetch(cloudUrl()+"/livetr",{method:"POST",headers:{"Content-Type":"application/json","x-app-key":accessKey()},body:JSON.stringify({text,engine:"google",glossary:trGlossary(),keep:liveKeep(text,job),ctx:[job&&job.title,prev&&("lời trước đó: "+prev)].filter(Boolean).join(" · ")})});
+      if(!r.ok||/json/i.test(r.headers.get("content-type")||"")){const j=await r.json().catch(()=>({}));throw new Error(j.loi||"Dịch lỗi");}
+      out=(await r.text()).trim().replace(/^["“](.*)["”]$/s,"$1");}
+    catch(e){err=e&&e.message||"Dịch lỗi";}
+  }
+  if(!liveSegs.includes(seg))return;   // đoạn đã bị thay (đọc chính tả sửa chữ) → bỏ kết quả cũ
+  if(out){seg.en=out;seg.st="ok";}else{seg.st="err";seg.err=err+" · Enter để thử lại";}
+  liveRender();liveSaveSession();
+}
+// danh sách tên cần giữ nguyên (cho Gemini khi phải dùng tới): tên tự lưu + tên trong job + cụm viết hoa
 function liveKeep(text,job){const out=new Set(trNames(text));
   if(job){[job.locationName,job.location,...lsGuessNames(job)].forEach(x=>x&&out.add(String(x).trim()));const c=job.lsCode&&(LS.couples||[]).find(x=>x.code===job.lsCode);if(c){c.brideName&&out.add(c.brideName);c.groomName&&out.add(c.groomName);}}
   return [...out].filter(x=>x&&x.length>=2&&x.length<=60).slice(0,40);}
-function liveArchive(){if(!liveCur||!liveCur.en)return;const h=liveHist().filter(x=>x.vi!==liveCur.vi);h.unshift({vi:liveCur.vi,en:liveCur.en,at:Date.now()});liveSaveHist(h);liveCur=null;liveRenderHist();}
-function liveRenderHist(){const box=document.getElementById("liveHist");if(!box)return;const h=liveHist();
-  box.innerHTML=h.length?`<div class="live-hhead"><span>Đã dịch</span><button type="button" onclick="liveClearHist()">Xoá</button></div>`+h.map((x,i)=>`<button type="button" class="live-item" onclick="liveShow(${i})"><span class="live-src">${esc(x.vi)}</span><b>${esc(x.en)}</b></button>`).join(""):"";}
-function liveClearHist(){if(!confirm("Xoá các câu đã dịch?"))return;liveSaveHist([]);liveRenderHist();}
-function liveShow(i){const x=liveHist()[i];if(!x)return;liveAbort();if(liveCur&&liveCur.en)liveArchive();liveCur={vi:x.vi,en:x.en,done:true};liveRenderCur({meta:"Câu đã dịch trước đó"});document.getElementById("liveOut").scrollTop=0;}
-function liveRenderCur(o={}){const box=document.getElementById("liveCur");if(!box||!liveCur)return;const c=liveCur;
-  box.innerHTML=`<div class="live-src">${esc(c.vi)}</div><div class="live-en${c.done?"":" typing"}" id="liveEn">${esc(c.en||"")}${c.done?"":'<span class="live-caret"></span>'}</div>
-    <div class="live-meta"><span class="${o.err?"err":""}">${o.err?esc(o.err):esc(o.meta||"")}</span>${c.done&&c.en?`<button type="button" onclick="copyText(liveCurText(),this)">📋 Chép</button>`:""}${o.err?`<button type="button" onclick="liveRun(liveCur.vi,true,true)">Thử lại</button>`:""}</div>`;}
-function liveCurText(){return liveCur?liveCur.en:"";}
-async function liveRun(text,commit,force){
-  text=String(text||"").trim();if(!text)return;
-  if(liveCur&&liveCur.vi===text&&liveCur.done&&liveCur.en&&!force){if(commit)liveCur.committed=true;return;}   // đã dịch câu này rồi
-  if(liveCur&&liveCur.vi===text&&!liveCur.done&&liveCtl&&!force){if(commit)liveCur.committed=true;return;}   // câu này đang dịch dở → chờ tiếp
-  if(liveCur&&liveCur.vi!==text&&liveCur.committed&&liveCur.en)liveArchive();   // câu trước đã chốt → đưa xuống lịch sử
-  liveAbort();const seq=++liveSeq;
-  liveCur={vi:text,en:"",done:false,committed:!!commit};
-  const hit=!force&&liveCache.get(text);if(hit){liveCur.en=hit.en;liveCur.done=true;liveRenderCur({meta:hit.meta});return;}
-  liveRenderCur({meta:"Đang dịch…"});
-  if(!accessKey()){liveCur.done=true;liveRenderCur({err:"Chưa kết nối máy chủ — vào Khác → Đồng bộ để nhập mã truy cập"});return;}
-  const job=liveJob&&state.jobs.find(x=>x.id===liveJob);
-  const ctx=job?[job.title,job.type,job.locationName||job.location].filter(Boolean).join(" · "):"";
-  const t0=performance.now();const ctl=new AbortController();liveCtl=ctl;
-  try{
-    const r=await fetch(cloudUrl()+"/livetr",{method:"POST",signal:ctl.signal,headers:{"Content-Type":"application/json","x-app-key":accessKey()},body:JSON.stringify({text,glossary:trGlossary(),keep:liveKeep(text,job),ctx})});
-    if(!r.ok||/json/i.test(r.headers.get("content-type")||"")){const j=await r.json().catch(()=>({}));throw new Error(j.loi||"Dịch lỗi — thử lại");}
-    const prov=r.headers.get("x-provider")==="cloudflare"?"Cloudflare AI":"Gemini";let out="";
-    if(r.body&&r.body.getReader){const rd=r.body.getReader(),dec=new TextDecoder();
-      while(true){const {done,value}=await rd.read();if(done)break;if(seq!==liveSeq){try{rd.cancel();}catch(_){}return;}out+=dec.decode(value,{stream:true});liveCur.en=out.replace(/^\s+/,"");liveRenderCur({meta:"Đang dịch…"});}
-      out+=dec.decode();}
-    else out=await r.text();
-    if(seq!==liveSeq)return;
-    out=out.trim().replace(/^["“](.*)["”]$/s,"$1");if(!out)throw new Error("Không nhận được bản dịch — thử lại");
-    const meta=`${prov} · ${((performance.now()-t0)/1000).toFixed(1).replace(".",",")} giây`;
-    liveCur.en=out;liveCur.done=true;liveCache.set(text,{en:out,meta});if(liveCache.size>200)liveCache.delete(liveCache.keys().next().value);
-    liveRenderCur({meta});
-  }catch(e){if(e&&e.name==="AbortError")return;if(seq!==liveSeq)return;liveCur.done=true;liveRenderCur({err:e&&e.message||"Dịch lỗi"});}
-  finally{if(liveCtl===ctl)liveCtl=null;}
-}
 function readerSpeedLabel(p){return `x${p.rate||2}`;}
 function closeReader(){const r=document.getElementById("reader");if(!r)return;readerStop();r.hidden=true;r.innerHTML="";document.documentElement.classList.remove("reader-open");if(!document.documentElement.classList.contains("live-open"))keepAwake(false);}
 function readerSize(d){const p=readerPrefs();p.size=Math.max(16,Math.min(72,p.size+d));saveReaderPrefs(p);const t=document.getElementById("readerText");if(t)t.style.fontSize=p.size+"px";const l=document.getElementById("rdSize");if(l)l.textContent=p.size+"px";}
