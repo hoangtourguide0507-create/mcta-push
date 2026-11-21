@@ -1,5 +1,5 @@
 
-const APP_VERSION="V28.22";
+const APP_VERSION="V28.23";
 // V28.0: app chạy trên GitHub Pages; dữ liệu + thông báo nằm trên máy chủ Cloudflare riêng (mcta-push).
 const CLOUD_DEFAULT="https://mcta-push.hoangtourguide0507.workers.dev";
 const KEY="freelance_planner_v12";
