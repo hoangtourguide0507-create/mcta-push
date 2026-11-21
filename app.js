@@ -1,5 +1,5 @@
 
-const APP_VERSION="V28.23";
+const APP_VERSION="V28.24";
 // V28.0: app chạy trên GitHub Pages; dữ liệu + thông báo nằm trên máy chủ Cloudflare riêng (mcta-push).
 const CLOUD_DEFAULT="https://mcta-push.hoangtourguide0507.workers.dev";
 const KEY="freelance_planner_v12";
@@ -871,7 +871,7 @@ more(){
  </div>
  <section class="section"><div class="section-head"><h2>Loại show</h2><button class="black-btn" onclick="addJobType()">${icon("plus",14)} Thêm loại</button></div><div class="type-settings-list">${state.settings.jobTypes.map((t,i)=>{const c=typeMeta(t.name);return `<div class="type-setting-row"><span class="tag type-tag" style="--type-bg:${c.bg};--type-color:${c.color};--type-border:${c.border}">${esc(t.name)}</span><div class="type-setting-actions"><button class="mini-btn" onclick="renameJobType('${t.id}')">Sửa</button><button class="mini-btn danger-mini" onclick="deleteJobType('${t.id}')">Xóa</button></div></div>`}).join("")}</div></section>
  <section class="section"><div class="section-head"><h2>Giao diện</h2><span class="small">2 phong cách · mỗi máy chọn riêng</span></div><div class="theme-grid two-themes">${themeCard("pop","Super App ✦","Sáng · cam rực · icon nhiều màu · hiệu ứng vui, nảy, pháo giấy",state.settings.theme)}${themeCard("stage","Sân khấu ✧","Tối · vàng gold · icon nét mảnh phát sáng · ánh đèn, kim tuyến",state.settings.theme)}</div><div class="small pay-note">Đổi giao diện xong, biểu tượng ngoài Màn hình chính chỉ đổi khi bạn xoá và thêm lại app.</div></section>
- <section class="section"><div class="card subtle-box"><div class="eyebrow">ĐỒNG BỘ</div><h3>${localMode?"LOCAL TEST MODE":backendReady?"Cloud sync đã sẵn sàng":"Chưa kết nối cloud"}</h3><p>${localMode?"Dữ liệu chỉ nằm trên MacBook này; không ghi lên cloud.":"Dữ liệu được lưu trên máy chủ Cloudflare riêng của bạn để mọi máy dùng chung một bộ dữ liệu."}</p><p class="small app-ver">Phiên bản ứng dụng: <b>${APP_VERSION}</b></p></div></section>`;
+ <section class="section"><div class="card subtle-box"><div class="eyebrow">ĐỒNG BỘ</div><h3>${localMode?"LOCAL TEST MODE":backendReady?"Cloud sync đã sẵn sàng":"Chưa kết nối cloud"}</h3><p>${localMode?"Dữ liệu chỉ nằm trên MacBook này; không ghi lên cloud.":"Dữ liệu được lưu trên máy chủ Cloudflare riêng của bạn để mọi máy dùng chung một bộ dữ liệu."}</p><p class="small app-ver">Phiên bản ứng dụng: <b>${APP_VERSION}</b></p><button type="button" class="outline-btn kbdiag-btn" onclick="kbDiagToggle()">${kbDiagOn()?"🔧 Tắt chẩn đoán bàn phím":"🔧 Bật chẩn đoán bàn phím"}</button></div></section>`;
 }}
 function setAppName(){
   const value=prompt("Tên hiển thị của ứng dụng:",state.settings.appName||"MC Thiên Ân");
@@ -1227,7 +1227,7 @@ document.addEventListener("keydown",e=>{if(!rteEl()||!document.activeElement||do
 function openNote(existing=null,opts={}){
   let n=existing||{id:"",title:"",body:"",jobId:opts.jobId||"",kind:opts.kind||"script"};const p=readerPrefs();noteDirty=false;
   // Còn bản nháp chưa lưu (app bị đóng / tải lại giữa chừng) → hỏi khôi phục
-  const dr=opts.fresh?null:noteDraftGet(n.id);let restored=false;
+  kbLog.length=0;kbT0=Date.now();document.getElementById("kbDiag")?.remove();const dr=opts.fresh?null:noteDraftGet(n.id);let restored=false;
   if(dr&&dr.html!==noteHtml(n)&&(!n.updatedAt||dr.at>Date.parse(n.updatedAt))&&confirm(`Có bản nháp chưa lưu (${relTime(dr.at)}) của kịch bản này. Mở bản nháp?`)){n={...n,title:dr.title||n.title,html:dr.html,jobId:dr.jobId??n.jobId,kind:dr.kind||n.kind};restored=true;}else if(dr)noteDraftClear(n.id);
   const tb=(cmd,label,title,cls="")=>`<button type="button" class="tb ${cls}" data-cmd="${cmd}" onclick="${cmd}" title="${title}" aria-label="${title}">${label}</button>`;
   openModal(`<form class="note-editor" data-id="${esc(n.id)}" onsubmit="saveNote(event)" oninput="noteDirty=true;noteDraftSoon();noteAutoSoon()" onchange="noteDirty=true;noteDraftSoon();noteAutoSoon()">
@@ -1399,7 +1399,7 @@ window.addEventListener("pagehide",blurEditable);
 // Giữ vị trí con trỏ / vùng chọn gần nhất trong kịch bản (để nút ⌨︎ mở bàn phím đúng chỗ)
 let rteLastRange=null;
 document.addEventListener("selectionchange",()=>{const b=rteEl(),sl=getSelection();if(b&&sl&&sl.rangeCount&&b.contains(sl.anchorNode))rteLastRange=sl.getRangeAt(0).cloneRange();});
-function kbFocus(r){const b=rteEl();if(!b)return;if(document.activeElement===b)b.blur();b.focus({preventScroll:true});
+function kbFocus(r){const b=rteEl();if(!b)return;kbNote("APP refocus "+kbState());if(document.activeElement===b)b.blur();b.focus({preventScroll:true});
   if(r&&b.contains(r.startContainer)){const sl=getSelection();sl.removeAllRanges();sl.addRange(r);}}
 // Nút ⌨︎ trên thanh công cụ: chắc chắn mở bàn phím (một lần chạm vào nút = iOS cho phép mở)
 function kbForce(){const b=rteEl();if(!b)return;let r=rteLastRange&&b.contains(rteLastRange.startContainer)?rteLastRange:null;
@@ -1413,6 +1413,29 @@ document.addEventListener("pointerdown",e=>{const b=rteEl();if(e.pointerType!=="
   setTimeout(()=>{if(kbOpen()||document.getElementById("nePenHint")||!rteEl())return;const dock=document.querySelector("#modalCard .ne-dock");if(!dock)return;
     dock.insertAdjacentHTML("afterbegin",`<div class="ne-pen" id="nePenHint"><b>✏️ Đang dùng bút</b><span>iPad bật chế độ <b>viết tay</b> nên không hiện bàn phím. Muốn gõ phím: <b>chạm bằng ngón tay</b> vào chỗ cần sửa (bút vẫn dùng để bôi chọn chữ được), hoặc bấm biểu tượng bàn phím ⌨︎ trên thanh nhỏ của iPad.</span><button type="button" class="ne-pen-ok" onclick="penHintOff()">Đã hiểu</button></div>`);},700);
 },{passive:true,capture:true});
+// V28.24 — Chẩn đoán bàn phím (tạm thời): ghi lại các sự kiện chạm / focus / bàn phím trong màn soạn kịch bản và hiện ở góc màn hình
+// (không chặn thao tác) để chụp màn hình gửi lại khi lỗi "không hiện bàn phím" xảy ra. Bật / tắt ở Khác → Đồng bộ.
+function kbDiagOn(){try{return localStorage.getItem("mcta_kbdiag")==="1";}catch(_){return false;}}
+function kbDiagToggle(){try{localStorage.setItem("mcta_kbdiag",kbDiagOn()?"0":"1");}catch(_){}render();showToast(kbDiagOn()?"Đã bật chẩn đoán — mở kịch bản và làm lại thao tác bị lỗi":"Đã tắt chẩn đoán");}
+const kbLog=[];let kbT0=Date.now();
+function kbDesc(el){if(!el||!el.tagName)return String(el);if(el===document.body)return "body";const b=rteEl();if(b&&el===b)return "NOTE";if(b&&b.contains(el))return "note>"+el.tagName.toLowerCase();return el.tagName.toLowerCase()+(el.id?"#"+el.id:"")+(el.className&&typeof el.className==="string"?"."+el.className.split(" ")[0]:"");}
+function kbState(){const vv=window.visualViewport,sl=getSelection(),b=rteEl();return `a=${kbDesc(document.activeElement)} vv=${vv?Math.round(vv.height)+"/"+window.innerHeight+(vv.offsetTop?"+"+Math.round(vv.offsetTop):""):"-"} sel=${sl&&sl.rangeCount?(b&&b.contains(sl.anchorNode)?(sl.isCollapsed?"caret":"range"):"out"):"none"}`;}
+function kbNote(msg){if(!kbDiagOn()||!rteEl()||document.getElementById("modal")?.classList.contains("hidden"))return;kbLog.push(((Date.now()-kbT0)/1000).toFixed(2)+" "+msg);if(kbLog.length>22)kbLog.shift();
+  let el=document.getElementById("kbDiag");if(!el){el=document.createElement("div");el.id="kbDiag";document.body.appendChild(el);}el.textContent=kbHead()+"\n"+kbLog.join("\n");}
+function kbHead(){const b=rteEl();const ua=(navigator.userAgent.match(/OS (\d+[_\d]*)/)||[])[1]||"";const cs=b?getComputedStyle(b):null,ps=b&&b.parentElement?getComputedStyle(b.parentElement):null;
+  return `${APP_VERSION} iOS ${ua.replace(/_/g,".")} ${window.innerWidth}x${window.innerHeight} sa=${isStandalone?(isStandalone()?1:0):"?"} tp=${navigator.maxTouchPoints} ce=${b?b.contentEditable+"/"+b.isContentEditable:"-"} us=${cs?(cs.webkitUserSelect||cs.userSelect):"-"}/${ps?(ps.webkitUserSelect||ps.userSelect):"-"}`;}
+(function kbDiagHooks(){
+  const inNote=e=>{const b=rteEl();return b&&e.target&&b.contains(e.target);};
+  document.addEventListener("touchstart",e=>{if(!rteEl())return;const t=e.touches[0];kbNote(`TS ${kbDesc(e.target)} ${t&&t.touchType||""} n=${e.touches.length} ${kbState()}`);},{passive:true,capture:true});
+  document.addEventListener("touchend",e=>{if(!rteEl())return;kbNote(`TE ${kbDesc(e.target)} ${kbState()}`);setTimeout(()=>kbNote(`  +400ms ${kbState()}`),400);},{passive:true,capture:true});
+  document.addEventListener("pointerdown",e=>{if(inNote(e))kbNote(`PD ${e.pointerType}`);},{passive:true,capture:true});
+  document.addEventListener("focusin",e=>{if(rteEl())kbNote(`FOCUS ${kbDesc(e.target)}`);},true);
+  document.addEventListener("focusout",e=>{if(rteEl())kbNote(`BLUR ${kbDesc(e.target)} → ${kbDesc(e.relatedTarget)}`);},true);
+  document.addEventListener("contextmenu",e=>{if(inNote(e))kbNote("CONTEXTMENU");},true);
+  let lastSel="";document.addEventListener("selectionchange",()=>{if(!rteEl())return;const s=kbState().split(" sel=")[1];if(s!==lastSel){lastSel=s;kbNote("SEL "+s);}});
+  if(window.visualViewport){let lh=0;visualViewport.addEventListener("resize",()=>{const h=Math.round(visualViewport.height);if(Math.abs(h-lh)>40){lh=h;kbNote(`VV ${h}/${window.innerHeight} kb=${kbOpen()?1:0}`);}});}
+  document.addEventListener("visibilitychange",()=>kbNote("VIS "+document.visibilityState));
+})();
 // Đếm chữ + thời gian đọc ước tính (khoảng 150 tiếng/phút)
 let rteStatTimer=null;
 function rteStat(){const e=rteEl(),st=document.getElementById("neStat");if(!e||!st)return;const w=(e.innerText||"").trim().split(/\s+/).filter(Boolean).length;
@@ -1435,7 +1458,7 @@ function fitEditor(){const m=document.getElementById("modal"),vv=window.visualVi
 if(window.visualViewport){visualViewport.addEventListener("resize",fitEditor);visualViewport.addEventListener("scroll",fitEditor);}
 // Bàn phím đóng mà trang còn bị đẩy lệch → kéo về đúng chỗ để các nút bấm lại được.
 document.addEventListener("focusout",()=>{if(!document.documentElement.classList.contains("modal-open"))return;setTimeout(()=>{const a=document.activeElement;if(a&&(a.isContentEditable||/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)))return;if(window.scrollY)window.scrollTo(0,0);fitEditor();},120);});
-function closeNoteEditor(){if(noteDirty&&noteAutoSave())showToast("Đã lưu kịch bản ✓");clearTimeout(noteDraftTimer);clearTimeout(noteAutoTimer);noteDraftClear(document.querySelector("#modalCard form.note-editor")?.dataset.id);noteDirty=false;const jid=document.querySelector("#modalCard select[name=jobId]")?.value;closeModal();if(openJobAfterNote&&jid){openJobAfterNote=false;openJob(jid);}openJobAfterNote=false;}
+function closeNoteEditor(){setTimeout(()=>document.getElementById("kbDiag")?.remove(),0);if(noteDirty&&noteAutoSave())showToast("Đã lưu kịch bản ✓");clearTimeout(noteDraftTimer);clearTimeout(noteAutoTimer);noteDraftClear(document.querySelector("#modalCard form.note-editor")?.dataset.id);noteDirty=false;const jid=document.querySelector("#modalCard select[name=jobId]")?.value;closeModal();if(openJobAfterNote&&jid){openJobAfterNote=false;openJob(jid);}openJobAfterNote=false;}
 function saveNoteThenRead(id){const f=document.querySelector("#modalCard form.note-editor");if(noteDirty){f.requestSubmit();setTimeout(()=>openReader(id),150);}else{closeModal();openReader(id);}}
 function deleteNote(id,fromModal){const n=state.notes.find(x=>x.id===id);if(!n)return;if(!confirm(`Xoá note “${n.title||"(Không tiêu đề)"}”? Máy trợ lý cũng sẽ xoá theo.`))return;state.notes=state.notes.filter(x=>x.id!==id);save();if(fromModal)closeModal();render();showToast("Đã xoá note");}
 // ---- V23.3: Chế độ đọc toàn màn hình (chạy hoàn toàn trên máy, không dùng mạng) ----

@@ -1166,3 +1166,6 @@ button{color:inherit}
 .live-prev .live-item b{display:block;margin-bottom:4px}
 .live-viewbar{display:flex;justify-content:center;padding:8px 0}
 .live-viewbar button{border:1px solid var(--lv-line);background:var(--lv-card);color:inherit;border-radius:12px;padding:9px 16px;font:inherit;font-weight:800;cursor:pointer}
+/* V28.24: chẩn đoán bàn phím (tạm thời) */
+#kbDiag{position:fixed;right:6px;top:calc(env(safe-area-inset-top) + 56px);z-index:400;max-width:min(62vw,430px);max-height:58vh;overflow:hidden;padding:6px 8px;border-radius:10px;background:rgba(0,0,0,.78);color:#a7f3d0;font:10.5px/1.35 ui-monospace,Menlo,monospace;white-space:pre-wrap;word-break:break-all;pointer-events:none}
+.kbdiag-btn{margin-top:8px}
